@@ -63,7 +63,8 @@ Tre parole che la racchiudono: **Tue. Per sempre. Trasmissibili.**
 
 ## 5. MVP — scope iniziale
 
-L'MVP è composto da tre funzionalità integrate. Tutto il resto viene dopo.
+L'MVP è composto da quattro funzionalità integrate. Tutto il resto viene
+dopo.
 
 1. **Journaling vocale quotidiano**
    L'utente registra audio brevi durante la giornata. Trascrizione on-device,
@@ -79,8 +80,43 @@ L'MVP è composto da tre funzionalità integrate. Tutto il resto viene dopo.
    ciò che hai dato in pasto a Niklaus. Risposte ancorate ai dati, con
    citazione della fonte ("lo hai detto il 12 marzo, audio delle 18:42").
 
+4. **Daily Question**
+   Ogni giorno Niklaus pone una domanda all'utente per colmare attivamente
+   i gap nella memoria e approfondire chi è. È il motore di engagement
+   dell'app: risolve il "foglio bianco" che uccide le app di journaling.
+   Principi: 1 domanda al giorno massimo, sempre skippabile senza guilt,
+   nessuno streak, nessuna gamification. Tono: amico curioso, non
+   terapeuta. Selezione progressiva: prima domande di fondazione (chi sei,
+   chi ami), poi gap-filling sui dati mancanti, poi domande più profonde
+   sui temi emersi.
+
 Tutto il resto (integrazione email, salute, social, voice clone, sezione
-eredi, terapia) è esplicitamente fuori scope dall'MVP.
+eredi, terapia, weekly report) è esplicitamente fuori scope dall'MVP.
+
+### Roadmap post-MVP
+
+**Active Weekly Review** — flagship feature di fase 2, abilitata
+dall'integrazione con email, calendar, chat, health, screen time.
+
+Non un riassunto passivo ("hai parlato di X 8 volte"), ma un **mirror
+attivo dei tuoi impegni**: Niklaus confronta ciò che hai detto di voler
+fare con ciò che i dati mostrano che hai effettivamente fatto.
+
+Esempi:
+- *"Hai detto domenica che volevi dormire 8 ore. Media reale: 6h12.
+  Le sere peggiori erano dopo riunioni con Marco."*
+- *"Hai promesso a tua moglie venerdì che l'avresti chiamata di più.
+  Non l'hai fatto."*
+
+Vincolo etico fondante: **Niklaus non giudica con metriche universali.**
+Riflette rispetto a *quello che l'utente stesso ha detto di volere*. Non è
+"dovresti fare più sport" (wellness coach generico — escluso dal nostro
+positioning), è "a marzo hai detto di voler correre 3 volte a settimana,
+in queste 4 settimane stai facendo 1.2". Tono: nessun shaming, nessun
+"you failed", sì "this is what I'm noticing".
+
+Questa feature è il principale moltiplicatore di valore percepito post-MVP
+e giustifica da sola la fascia Legacy.
 
 ## 6. Caso d'uso cuore: l'eredità digitale
 
