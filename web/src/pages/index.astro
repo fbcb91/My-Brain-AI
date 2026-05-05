@@ -1,0 +1,317 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const faqs = [
+  {
+    q: 'When will Niklaus launch?',
+    a: "We're aiming for late 2026. Waitlist members get early access first.",
+  },
+  {
+    q: 'How is this different from Replika, Pi, or Notion AI?',
+    a: 'Those tools are designed to be companions or productivity assistants. Niklaus has one job: be a private memory of you. No persona, no roleplay — just your data, organized so you can find your way back to it.',
+  },
+  {
+    q: 'Where does my data live?',
+    a: 'Recordings are captured and transcribed on your device. Encrypted storage in the cloud lets you access it across devices and pass it on through Heritage. You can export everything in plain formats anytime.',
+  },
+  {
+    q: 'Will my data be used to train models?',
+    a: "Never. We don't train models on your data. We don't sell it. We don't share it.",
+  },
+  {
+    q: 'What happens if I stop paying?',
+    a: "You can always export everything you've shared, free, in plain formats. The data is yours. The conversation feature requires an active subscription.",
+  },
+  {
+    q: 'What happens to my Niklaus when I die?',
+    a: 'You designate heirs in advance. They get access to your memory under rules you set — full access, restricted by topic, time-locked, or anything in between.',
+  },
+];
+---
+
+<Layout>
+  <main>
+    <!-- HERO -->
+    <section class="px-6 pt-16 pb-32 md:pt-20 md:pb-40">
+      <div class="mx-auto max-w-3xl">
+        <p class="font-serif text-2xl tracking-tight text-ink mb-24 md:mb-32">
+          Niklaus
+        </p>
+        <h1 class="font-serif text-5xl md:text-7xl leading-[1.05] text-ink mb-10 tracking-tight">
+          Your memory.<br />That talks back.
+        </h1>
+        <p class="text-lg md:text-xl text-muted leading-relaxed max-w-xl mb-12">
+          A private space for the thoughts, voices, and moments that make you
+          who you are. Yours forever — even after you.
+        </p>
+        <form id="waitlist-form" class="max-w-md">
+          <div class="flex flex-col sm:flex-row gap-3">
+            <input
+              type="email"
+              name="email"
+              required
+              autocomplete="email"
+              placeholder="you@example.com"
+              class="flex-1 bg-transparent border-b border-ink px-1 py-3 text-ink placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
+            />
+            <button
+              type="submit"
+              class="bg-ink text-paper px-6 py-3 text-sm font-medium hover:bg-accent transition-colors whitespace-nowrap"
+            >
+              Join the waitlist →
+            </button>
+          </div>
+          <p id="waitlist-status" class="text-sm text-muted mt-4">
+            No spam. We'll only write when there's news.
+          </p>
+        </form>
+      </div>
+    </section>
+
+    <!-- PROMISE -->
+    <section class="border-t border-line px-6 py-24 md:py-32">
+      <div class="mx-auto max-w-3xl">
+        <h2 class="font-serif text-3xl md:text-4xl text-ink mb-16 tracking-tight">
+          Built on three promises.
+        </h2>
+        <div class="space-y-12">
+          <div>
+            <p class="font-serif text-xl text-ink mb-3">Yours, always.</p>
+            <p class="text-muted leading-relaxed max-w-xl">
+              Export everything — audio, transcripts, notes — anytime, in plain
+              formats. No lock-in. Ever.
+            </p>
+          </div>
+          <div>
+            <p class="font-serif text-xl text-ink mb-3">Private, by design.</p>
+            <p class="text-muted leading-relaxed max-w-xl">
+              Recordings are transcribed on your device. Cloud storage is
+              encrypted. We don't sell, share, or train on your data.
+            </p>
+          </div>
+          <div>
+            <p class="font-serif text-xl text-ink mb-3">Outlives you.</p>
+            <p class="text-muted leading-relaxed max-w-xl">
+              Designate heirs. Leave time-locked messages. Build a memory that
+              remains when you can't.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="border-t border-line px-6 py-24 md:py-32">
+      <div class="mx-auto max-w-3xl">
+        <h2 class="font-serif text-3xl md:text-4xl text-ink mb-16 tracking-tight">
+          Three steps.
+        </h2>
+        <div class="space-y-14">
+          <div>
+            <p class="text-sm text-muted mb-2 font-medium tracking-wide">
+              01 — Capture
+            </p>
+            <p class="font-serif text-2xl text-ink mb-3">
+              Speak, write, dump a thought.
+            </p>
+            <p class="text-muted leading-relaxed max-w-xl">
+              Niklaus stores it, encrypted. Voice transcription happens on
+              your phone.
+            </p>
+          </div>
+          <div>
+            <p class="text-sm text-muted mb-2 font-medium tracking-wide">
+              02 — Remember
+            </p>
+            <p class="font-serif text-2xl text-ink mb-3">
+              Niklaus learns who you are.
+            </p>
+            <p class="text-muted leading-relaxed max-w-xl">
+              Your people, places, patterns. Quietly. Just for you.
+            </p>
+          </div>
+          <div>
+            <p class="text-sm text-muted mb-2 font-medium tracking-wide">
+              03 — Ask
+            </p>
+            <p class="font-serif text-2xl text-ink mb-3">
+              Talk to your own memory.
+            </p>
+            <p class="text-muted leading-relaxed max-w-xl">
+              Niklaus answers in plain language, always with the source.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HERITAGE -->
+    <section class="border-t border-line bg-ink text-paper px-6 py-28 md:py-40">
+      <div class="mx-auto max-w-3xl">
+        <h2 class="font-serif text-4xl md:text-5xl mb-12 tracking-tight leading-[1.05]">
+          Build something that<br />remains.
+        </h2>
+        <p class="text-lg leading-relaxed mb-6 max-w-xl text-paper/75">
+          Most things we build disappear with us. Niklaus is different.
+        </p>
+        <p class="text-lg leading-relaxed mb-12 max-w-xl text-paper/75">
+          Choose the people who matter. Leave them messages for moments you
+          won't be there for. A child's eighteenth birthday. A twenty-fifth
+          anniversary. A question they'll ask one day.
+        </p>
+        <p class="font-serif text-3xl md:text-4xl">
+          Be there to answer it.
+        </p>
+      </div>
+    </section>
+
+    <!-- DIFFERENT -->
+    <section class="border-t border-line px-6 py-24 md:py-32">
+      <div class="mx-auto max-w-3xl">
+        <h2 class="font-serif text-3xl md:text-4xl text-ink mb-12 tracking-tight">
+          Niklaus is not another AI.
+        </h2>
+        <div class="space-y-6 text-muted leading-relaxed max-w-xl text-lg">
+          <p>
+            Companions like Replika are built to entertain. Assistants like
+            Copilot are built to help you ship.
+          </p>
+          <p>
+            Niklaus has one purpose: to be a faithful, private record of
+            <span class="text-ink">you</span>. No persona. No roleplay. Just
+            your words, your voice, and a quiet way back to them.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="border-t border-line px-6 py-24 md:py-32">
+      <div class="mx-auto max-w-3xl">
+        <h2 class="font-serif text-3xl md:text-4xl text-ink mb-16 tracking-tight">
+          A few questions.
+        </h2>
+        <div class="space-y-12">
+          {
+            faqs.map((faq) => (
+              <div>
+                <p class="font-serif text-xl text-ink mb-3">{faq.q}</p>
+                <p class="text-muted leading-relaxed max-w-xl">{faq.a}</p>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- CLOSING CTA -->
+    <section class="border-t border-line px-6 py-24 md:py-32">
+      <div class="mx-auto max-w-3xl">
+        <h2 class="font-serif text-3xl md:text-4xl text-ink mb-10 tracking-tight">
+          Be among the first.
+        </h2>
+        <form id="waitlist-form-bottom" class="max-w-md">
+          <div class="flex flex-col sm:flex-row gap-3">
+            <input
+              type="email"
+              name="email"
+              required
+              autocomplete="email"
+              placeholder="you@example.com"
+              class="flex-1 bg-transparent border-b border-ink px-1 py-3 text-ink placeholder:text-muted focus:outline-none focus:border-accent transition-colors"
+            />
+            <button
+              type="submit"
+              class="bg-ink text-paper px-6 py-3 text-sm font-medium hover:bg-accent transition-colors whitespace-nowrap"
+            >
+              Join the waitlist →
+            </button>
+          </div>
+          <p id="waitlist-status-bottom" class="text-sm text-muted mt-4">
+            No spam. We'll only write when there's news.
+          </p>
+        </form>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-line px-6 py-16">
+      <div class="mx-auto max-w-3xl flex flex-col md:flex-row gap-6 md:items-center md:justify-between">
+        <div>
+          <p class="font-serif text-xl text-ink mb-2">Niklaus</p>
+          <p class="text-sm text-muted">Built with care.</p>
+        </div>
+        <div class="text-sm text-muted">
+          <a
+            href="mailto:hello@niklaus.app"
+            class="hover:text-ink transition-colors"
+          >
+            hello@niklaus.app
+          </a>
+        </div>
+      </div>
+      <div class="mx-auto max-w-3xl mt-12 text-xs text-muted">
+        © 2026 Niklaus
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    function wireForm(formId: string, statusId: string) {
+      const form = document.getElementById(formId) as HTMLFormElement | null;
+      const status = document.getElementById(statusId) as HTMLParagraphElement | null;
+      if (!form || !status) return;
+
+      const button = form.querySelector(
+        'button[type="submit"]'
+      ) as HTMLButtonElement | null;
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+        const email = formData.get('email');
+
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Sending…';
+        }
+        status.textContent = '';
+        status.classList.remove('text-red-700');
+
+        try {
+          const res = await fetch('/api/waitlist', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+
+          if (res.ok) {
+            form.innerHTML =
+              '<p class="font-serif text-xl text-ink">You\'re in. We\'ll be in touch.</p>';
+          } else {
+            const data = (await res.json().catch(() => ({}))) as {
+              error?: string;
+            };
+            status.textContent =
+              data.error || 'Something went wrong. Try again?';
+            status.classList.add('text-red-700');
+            if (button) {
+              button.disabled = false;
+              button.textContent = 'Join the waitlist →';
+            }
+          }
+        } catch {
+          status.textContent = 'Network error. Try again?';
+          status.classList.add('text-red-700');
+          if (button) {
+            button.disabled = false;
+            button.textContent = 'Join the waitlist →';
+          }
+        }
+      });
+    }
+
+    wireForm('waitlist-form', 'waitlist-status');
+    wireForm('waitlist-form-bottom', 'waitlist-status-bottom');
+  </script>
+</Layout>
