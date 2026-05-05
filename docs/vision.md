@@ -1,7 +1,8 @@
-# Vision — My Brain (codename)
+# Vision — Niklaus
 
-> Documento vivo. Versione 0.1 — bozza iniziale da iterare.
-> Codename interno: **My Brain**. Brand pubblico da definire.
+> Documento vivo. Versione 0.2.
+> Brand: **Niklaus** (codename interno precedente: *My Brain*).
+> Dominio: niklaus.app. Trademark e App Store da formalizzare.
 
 ---
 
@@ -16,9 +17,9 @@ oggi, e dai tuoi cari domani.
 **Per** chi vuole che qualcosa di sé resti — oggi come ricordo personale,
 domani come eredità per chi ami.
 
-**My Brain è** un backup della tua memoria che parla.
+**Niklaus è** un backup della tua memoria che parla.
 
-**A differenza di** journaling app, AI companion o cloud storage, My Brain
+**A differenza di** journaling app, AI companion o cloud storage, Niklaus
 unisce ingestione continua dei tuoi dati, un modello che impara a essere te,
 e un passaggio ereditario pensato fin dal primo giorno.
 
@@ -60,7 +61,28 @@ Tre parole che la racchiudono: **Tue. Per sempre. Trasmissibili.**
    defunto non ha mai espresso. Non simula emozioni che non risultano dai
    dati. Soprattutto in modalità eredità.
 
-## 5. Caso d'uso cuore: l'eredità digitale
+## 5. MVP — scope iniziale
+
+L'MVP è composto da tre funzionalità integrate. Tutto il resto viene dopo.
+
+1. **Journaling vocale quotidiano**
+   L'utente registra audio brevi durante la giornata. Trascrizione on-device,
+   storage cifrato. Diventa il flusso primario di alimentazione della memoria.
+
+2. **Brain dump / Quick Capture**
+   Cattura veloce di idee, pensieri, cose di lavoro, "voglio ricordarmi che…".
+   Testo o voce. Stesso pipeline del journaling: alimenta la memoria
+   interrogabile e aiuta il modello a imparare meglio chi sei.
+
+3. **Chat con la propria memoria**
+   Interfaccia conversazionale in linguaggio naturale per interrogare tutto
+   ciò che hai dato in pasto a Niklaus. Risposte ancorate ai dati, con
+   citazione della fonte ("lo hai detto il 12 marzo, audio delle 18:42").
+
+Tutto il resto (integrazione email, salute, social, voice clone, sezione
+eredi, terapia) è esplicitamente fuori scope dall'MVP.
+
+## 6. Caso d'uso cuore: l'eredità digitale
 
 Il cuore emotivo e commerciale del prodotto.
 
@@ -80,7 +102,7 @@ figli — domani chissà". Il transumanesimo è uno strato implicito che attira
 early adopter tech, ma non è il messaggio principale verso il pubblico
 mainstream.
 
-## 6. Modello di monetizzazione (ipotesi di partenza)
+## 7. Modello di monetizzazione (ipotesi di partenza)
 
 Tre tier. Numeri da validare.
 
@@ -93,7 +115,70 @@ Tre tier. Numeri da validare.
 Da valutare: piano annuale (~€70-90/anno) per ridurre frizione decisionale
 sul modello stile Calm/Headspace.
 
-## 7. Cosa NON è My Brain
+## 8. Architettura tecnica — principi e scelte
+
+Architettura **ibrida cloud-first** con traiettoria dichiarata verso
+on-device. Promettiamo la traiettoria, non lo stato attuale.
+
+| Componente                       | Dove vive    | Note |
+|----------------------------------|--------------|------|
+| Cattura audio + trascrizione     | On-device    | Whisper locale, dati grezzi mai in chiaro fuori dal telefono |
+| Memoria recente (giorni/settimane) | On-device  | SQLite cifrato, latenza zero, funziona offline |
+| Memoria long-term (vector DB)    | Cloud        | Cifratura at-rest, architettura auditabile |
+| LLM principale (chat memoria)    | Cloud        | Claude / GPT, qualità irraggiungibile on-device oggi |
+| LLM piccolo (suggerimenti)       | On-device    | Llama 3.2 / Phi-3 quantized |
+| Voice clone (training)           | Cloud        | Richiede GPU |
+| Voice clone (inferenza)          | On-device quando possibile | Latenza + privacy |
+
+**Roadmap architetturale:**
+
+- **Fase 1 (MVP, mesi 0–12)**: cloud-first, cifratura at-rest robusta,
+  comunicazione trasparente all'utente.
+- **Fase 2 (12–24 mesi)**: spostare progressivamente più inferenza on-device
+  con il miglioramento dei modelli locali (Apple Intelligence, Gemini Nano).
+- **Fase 3 (24+ mesi)**: tier opzionale "fully local" come differenziatore
+  premium per utenti più esigenti sulla privacy.
+
+## 9. Eredità digitale — preferenze utente
+
+Le scelte sull'accesso post-mortem **non vivono nell'onboarding** (troppo
+pesanti emotivamente per il primo contatto). Vivono in una **sezione
+dedicata "Heritage Preferences"**, compilabile in qualsiasi momento.
+
+**Default scelti** (applicati se l'utente non personalizza):
+
+- **Accesso eredi**: pieno. Gli eredi designati possono interrogare l'intera
+  memoria senza restrizioni di contenuto.
+- **Filtri di contenuto**: nessuno. Niklaus non censura, non addolcisce, non
+  inventa: dice la verità che risulta dai dati.
+- **Onestà sui limiti**: quando il modello non sa, dice "non lo so". Mai
+  inventare pensieri o emozioni non supportati dai dati.
+- **Diritto all'oblio**: se l'utente in vita ha marcato contenuti come
+  "privati / non trasmissibili", restano esclusi. Tutto il resto passa.
+
+Razionale: *"se fossi un erede, vorrei sapere la verità"*. Default permissivi,
+opt-in restrittivi.
+
+L'utente può sempre, in qualsiasi momento:
+- Marcare singoli contenuti come privati / non trasmissibili
+- Restringere l'accesso degli eredi a finestre temporali o argomenti
+- Programmare lettere/messaggi temporizzati ("apri quando mio figlio compie 18")
+- Modificare gli eredi designati
+
+## 10. Lingua e mercati
+
+- **Lingua del prodotto**: inglese (UI, marketing, contenuti).
+- **Mercati di lancio prioritari**: US, UK, Canada, Australia, paesi nordici
+  (Svezia, Danimarca, Olanda, Norvegia), Germania urbana, Singapore.
+- **Mercati di seconda fase**: Europa del sud (incluso Italia), Asia Pacifico,
+  LatAm.
+- **Compliance baseline**: GDPR (default per tutti, anche utenti non-EU),
+  CCPA per California.
+
+Razionale: prodotto pensato per mercati culturalmente aperti all'introspezione
+digitale e con disponibilità a pagare per servizi premium su privacy.
+
+## 11. Cosa NON è Niklaus
 
 Definire cosa escludiamo è importante quanto cosa includiamo.
 
@@ -105,44 +190,34 @@ Definire cosa escludiamo è importante quanto cosa includiamo.
 - **Non vende mai dati aggregati**, nemmeno "anonimizzati"
 - **Non promette trasferimento di coscienza** (allusione sì, promessa no)
 
-## 8. Domande aperte da risolvere prima dell'MVP
+## 12. Domande aperte da risolvere prima dell'MVP
 
-Decisioni che impattano tutto il resto e che vanno prese presto.
+Decisioni ancora da prendere.
 
-1. **MVP: uno e uno solo caso d'uso**
-   Non costruiamo subito tutto. Quale fonte + quale interazione validiamo
-   per primi? Candidati: journaling vocale quotidiano + chat con la propria
-   memoria.
+1. **Trigger di morte**
+   Come si verifica il decesso per attivare l'accesso degli eredi? Check-in
+   periodico ("sei vivo?")? Conferma multipla degli eredi designati?
+   Integrazione con servizi notarili o anagrafe?
 
-2. **On-device vs cloud**
-   Modello locale (privacy massima, qualità minore) vs cloud cifrato
-   (qualità maggiore, complessità + rischi). Scelta architetturale chiave.
+2. **Verifica trademark e App Store per "Niklaus"**
+   Dominio `niklaus.app` libero, search Google poco rumorosa (alcune
+   sovrapposizioni con personaggi di fiction tipo *The Vampire Diaries*,
+   ma basso rischio brand). Restano da verificare: trademark in classe 9
+   (software) e 42 (SaaS) in EU + US, App Store / Play Store availability.
 
-3. **Etica del clone post-mortem**
-   - Cosa fa il modello quando l'erede chiede qualcosa che il defunto non
-     ha mai detto?
-   - Filtri sui contenuti che potrebbero ferire l'erede?
-   - Diritto all'oblio: vince il defunto o il vivo?
-   Queste risposte vanno scritte prima del lancio, non dopo.
+3. **Pricing — tier annuale vs solo mensile**
+   Aggiungere piano annuale stile Calm/Headspace (~€70-90/anno) per ridurre
+   frizione? Da validare con test di conversione.
 
-4. **Trigger di morte**
-   Come si verifica? Check-in periodico? Eredi designati che confermano?
-   Integrazione con servizi notarili?
+4. **Wording delle Heritage Preferences**
+   Le domande della sezione vanno scritte con cura. Valutare consulenza
+   psicologica/etica per il copy.
 
-5. **Naming pubblico**
-   Codename "My Brain" resta interno. Shortlist da esplorare:
-   *Echo, Lineage, Forever, Lascito, Heir, Beacon, Persist, Continua.*
-   Verificare disponibilità dominio, trademark, no associazioni negative
-   in altre lingue.
+## 13. Prossimi passi
 
-6. **Geografia di lancio**
-   Italia/Europa (GDPR-first come argomento di vendita) vs US (mercato più
-   grande, compliance più leggera).
-
-## 9. Prossimi passi
-
-1. Scegliere il caso d'uso #1 dell'MVP
-2. Decidere on-device vs cloud
-3. Scrivere la "carta etica" del clone post-mortem (1 pagina)
-4. Shortlist nome + verifica trademark/dominio
-5. Prototipo di onboarding che mostri il valore in <10 minuti
+1. Wireframe / prototipo dell'MVP (3 funzionalità: journaling vocale, brain
+   dump, chat memoria)
+2. Verifica trademark + App Store per "Niklaus"
+3. Bozza scritta delle Heritage Preferences (domande + default)
+4. Stack tecnico definito (mobile framework, vector DB, modelli)
+5. Onboarding che mostri il valore in <10 minuti
