@@ -1,83 +1,195 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Waveform from '../components/Waveform';
+import { listCaptures, saveCapture } from '../lib/db';
+import type { Capture } from '../lib/types';
+import { useRecorder } from '../hooks/useRecorder';
 
-interface CaptureItem {
-  time: string;
-  kind: 'voice' | 'note';
-  label: string;
-}
+const fmt = (s: number) => {
+  const sec = Math.max(0, Math.floor(s));
+  if (sec < 3600) {
+    return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+  }
+  return `${Math.floor(sec / 3600)}:${String(Math.floor((sec % 3600) / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+};
 
-const fmt = (s: number) =>
-  `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-
-const today = new Date().toLocaleDateString('en-US', {
+const headerDate = new Date().toLocaleDateString('en-US', {
   weekday: 'long',
   month: 'long',
   day: 'numeric',
 });
 
-export default function Today() {
-  const [recording, setRecording] = useState(false);
-  const [recordTime, setRecordTime] = useState(0);
-  const [items, setItems] = useState<CaptureItem[]>([
-    { time: '09:14', kind: 'voice', label: 'morning thoughts on the new role · 2:14' },
-    { time: '12:30', kind: 'note', label: '"remember to ask Marco about Friday"' },
-    { time: '18:42', kind: 'voice', label: 'after the call with mom · 0:45' },
-  ]);
+function startOfDay(t: number): number {
+  const d = new Date(t);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function groupLabel(ts: number): string {
+  const today = startOfDay(Date.now());
+  const cap = startOfDay(ts);
+  if (cap === today) return 'Today';
+  if (cap === today - 86400000) return 'Yesterday';
+  return new Date(ts).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+function timeLabel(ts: number): string {
+  return new Date(ts).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function newId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+interface AudioRowProps {
+  capture: Capture;
+  expanded: boolean;
+  onToggle: () => void;
+}
+
+function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
+  const url = useMemo(() => {
+    if (!capture.audioBlob) return null;
+    return URL.createObjectURL(capture.audioBlob);
+  }, [capture.audioBlob]);
 
   useEffect(() => {
-    if (!recording) return;
-    const start = Date.now();
-    const id = setInterval(
-      () => setRecordTime(Math.floor((Date.now() - start) / 1000)),
-      100
-    );
-    return () => clearInterval(id);
-  }, [recording]);
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [url]);
 
-  function startRec() {
-    setRecording(true);
-    setRecordTime(0);
-  }
-  function stopRec() {
-    if (recordTime >= 1) {
-      const now = new Date();
-      const t = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      setItems([{ time: t, kind: 'voice', label: `just now · ${fmt(recordTime)}` }, ...items]);
+  const label =
+    capture.kind === 'voice'
+      ? capture.transcript ?? `voice · ${fmt(capture.duration ?? 0)}`
+      : (capture.text ?? '');
+
+  return (
+    <li className="border-b border-line">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="grid w-full items-center gap-2.5 py-3.5 text-left"
+        style={{ gridTemplateColumns: '46px auto 1fr' }}
+      >
+        <span className="mono text-[11px] text-ink-3">{timeLabel(capture.createdAt)}</span>
+        <span
+          className="flex h-[22px] w-[22px] items-center justify-center rounded-full text-[10px] text-accent"
+          style={{
+            background:
+              capture.kind === 'voice' ? 'rgba(181, 107, 29, 0.12)' : '#ece6d8',
+            fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+          }}
+        >
+          {capture.kind === 'voice' ? '◉' : '✎'}
+        </span>
+        <span className="truncate text-[13.5px] text-ink-2">{label}</span>
+      </button>
+      {expanded && capture.kind === 'voice' && url && (
+        <div className="pb-3 pl-[58px] pr-1">
+          <audio src={url} controls preload="metadata" className="w-full" />
+        </div>
+      )}
+    </li>
+  );
+}
+
+export default function Today() {
+  const [captures, setCaptures] = useState<Capture[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const recorder = useRecorder();
+
+  const loadAll = useCallback(async () => {
+    const all = await listCaptures();
+    setCaptures(all);
+  }, []);
+
+  useEffect(() => {
+    loadAll().finally(() => setLoaded(true));
+  }, [loadAll]);
+
+  const handleStart = useCallback(() => {
+    void recorder.start();
+  }, [recorder]);
+
+  const handleStop = useCallback(async () => {
+    const result = await recorder.stop();
+    if (!result || result.duration < 0.6) return;
+    const capture: Capture = {
+      id: newId(),
+      createdAt: Date.now(),
+      kind: 'voice',
+      audioBlob: result.blob,
+      duration: result.duration,
+      mimeType: result.mimeType,
+    };
+    await saveCapture(capture);
+    await loadAll();
+  }, [recorder, loadAll]);
+
+  const grouped = useMemo(() => {
+    const groups: { label: string; items: Capture[] }[] = [];
+    let currentLabel = '';
+    for (const c of captures) {
+      const label = groupLabel(c.createdAt);
+      if (label !== currentLabel) {
+        groups.push({ label, items: [] });
+        currentLabel = label;
+      }
+      groups[groups.length - 1].items.push(c);
     }
-    setRecording(false);
-  }
+    return groups;
+  }, [captures]);
 
   return (
     <div className="screen">
       <div className="screen-content">
         <header className="pt-4">
-          <p className="eyebrow">{today}</p>
+          <p className="eyebrow">{headerDate}</p>
           <h1 className="display mt-1.5 text-[34px] leading-[1.05]">Today</h1>
         </header>
 
         <button
           type="button"
-          onMouseDown={startRec}
-          onMouseUp={stopRec}
-          onMouseLeave={() => recording && stopRec()}
-          onTouchStart={(e) => {
+          onPointerDown={(e) => {
             e.preventDefault();
-            startRec();
+            handleStart();
           }}
-          onTouchEnd={stopRec}
+          onPointerUp={() => {
+            void handleStop();
+          }}
+          onPointerLeave={() => {
+            if (recorder.isRecording) void handleStop();
+          }}
+          onPointerCancel={() => recorder.cancel()}
+          onContextMenu={(e) => e.preventDefault()}
           className="mt-6 flex w-full select-none flex-col items-center gap-3 rounded-3xl border px-5 py-7 transition-all"
           style={{
-            background: recording ? 'rgba(181, 107, 29, 0.12)' : '#fbf8f2',
-            borderColor: recording ? '#b56b1d' : 'rgba(26, 24, 21, 0.10)',
+            background: recorder.isRecording ? 'rgba(181, 107, 29, 0.12)' : '#fbf8f2',
+            borderColor: recorder.isRecording ? '#b56b1d' : 'rgba(26, 24, 21, 0.10)',
+            touchAction: 'none',
           }}
         >
           <span
             className="flex h-16 w-16 items-center justify-center rounded-full transition-all"
             style={{
-              background: recording ? '#b56b1d' : '#1a1815',
-              transform: recording ? 'scale(1.08)' : 'scale(1)',
-              boxShadow: recording ? '0 0 0 8px rgba(181, 107, 29, 0.12)' : 'none',
+              background: recorder.isRecording ? '#b56b1d' : '#1a1815',
+              transform: recorder.isRecording ? 'scale(1.08)' : 'scale(1)',
+              boxShadow: recorder.isRecording
+                ? '0 0 0 8px rgba(181, 107, 29, 0.12)'
+                : 'none',
             }}
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="#f6f2ea">
@@ -91,11 +203,11 @@ export default function Today() {
               />
             </svg>
           </span>
-          {recording ? (
+          {recorder.isRecording ? (
             <>
               <Waveform />
               <span className="mono text-[13px] tracking-[0.05em] text-accent">
-                ● Recording {fmt(recordTime)}
+                ● Recording {fmt(recorder.duration)}
               </span>
               <span className="text-xs text-ink-3">Release to save</span>
             </>
@@ -107,34 +219,39 @@ export default function Today() {
           )}
         </button>
 
-        <section className="mt-7">
-          <div className="mb-2 flex items-baseline justify-between">
-            <span className="eyebrow">Today</span>
-            <span className="text-xs text-ink-3">{items.length} captures</span>
+        {recorder.error && (
+          <p className="mt-3 text-center text-xs text-[#b94d2b]">{recorder.error}</p>
+        )}
+
+        {loaded && captures.length === 0 && !recorder.isRecording && (
+          <div className="mt-10 text-center">
+            <p className="display text-lg text-ink-2">Nothing here yet.</p>
+            <p className="mt-2 text-sm text-ink-3">
+              Press and hold the button above to record your first thought.
+            </p>
           </div>
-          <ul className="flex flex-col">
-            {items.map((item, i) => (
-              <li
-                key={`${item.time}-${i}`}
-                className={`grid items-center gap-2.5 border-line py-3.5 ${i === 0 ? 'border-t' : ''} border-b`}
-                style={{ gridTemplateColumns: '46px auto 1fr' }}
-              >
-                <span className="mono text-[11px] text-ink-3">{item.time}</span>
-                <span
-                  className="flex h-[22px] w-[22px] items-center justify-center rounded-full text-[10px] text-accent"
-                  style={{
-                    background:
-                      item.kind === 'voice' ? 'rgba(181, 107, 29, 0.12)' : '#ece6d8',
-                    fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-                  }}
-                >
-                  {item.kind === 'voice' ? '◉' : '✎'}
-                </span>
-                <span className="truncate text-[13.5px] text-ink-2">{item.label}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        )}
+
+        {grouped.map((group) => (
+          <section key={group.label} className="mt-7">
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="eyebrow">{group.label}</span>
+              <span className="text-xs text-ink-3">
+                {group.items.length} {group.items.length === 1 ? 'capture' : 'captures'}
+              </span>
+            </div>
+            <ul className="flex flex-col border-t border-line">
+              {group.items.map((c) => (
+                <AudioRow
+                  key={c.id}
+                  capture={c}
+                  expanded={expandedId === c.id}
+                  onToggle={() => setExpandedId((cur) => (cur === c.id ? null : c.id))}
+                />
+              ))}
+            </ul>
+          </section>
+        ))}
       </div>
     </div>
   );
