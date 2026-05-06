@@ -27,6 +27,16 @@ visita `http://<ip>:5174` da Safari iOS.
 L'anon key è progettata per essere pubblica — la sicurezza arriva
 dalle policy Row Level Security in Postgres.
 
+### Bindings Cloudflare Pages
+
+| Nome | Tipo | Note |
+|------|------|------|
+| `AI` | Workers AI | Necessario per `/api/transcribe`. Senza, le trascrizioni falliscono e la UI resta su "Transcribing…" |
+
+Da configurare nel dashboard Cloudflare → Pages → progetto **niklaus-app**
+→ **Settings** → **Bindings** → **Add binding** → tipo **Workers AI**,
+nome variabile `AI`. Triggera un re-deploy dopo l'aggiunta.
+
 ## Build
 
 ```bash

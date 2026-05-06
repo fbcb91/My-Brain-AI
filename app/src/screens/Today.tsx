@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRecorder } from '../hooks/useRecorder';
 import { listCaptures, saveCapture } from '../lib/db';
 import { syncAll, pullFromServer, getOrFetchAudioBlob } from '../lib/sync';
+import { transcribePending } from '../lib/transcribe';
 import type { Capture } from '../lib/types';
 
 const fmt = (s: number) => {
@@ -51,6 +52,20 @@ function newId(): string {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function getLabel(c: Capture): string {
+  if (c.kind === 'note') return c.text ?? '';
+  const t = c.transcript;
+  if (typeof t === 'string' && t.trim()) return t;
+  if (c.syncedAt && t === undefined) return 'Transcribing…';
+  return `voice · ${fmt(c.duration ?? 0)}`;
+}
+
+function isTranscribing(c: Capture): boolean {
+  return (
+    c.kind === 'voice' && Boolean(c.syncedAt) && c.transcript === undefined
+  );
 }
 
 interface AudioRowProps {
@@ -107,10 +122,8 @@ function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
     };
   }, [url]);
 
-  const label =
-    capture.kind === 'voice'
-      ? capture.transcript ?? `voice · ${fmt(capture.duration ?? 0)}`
-      : (capture.text ?? '');
+  const label = getLabel(capture);
+  const transcribing = isTranscribing(capture);
   const pending = !capture.syncedAt;
 
   return (
@@ -132,7 +145,11 @@ function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
         >
           {capture.kind === 'voice' ? '◉' : '✎'}
         </span>
-        <span className="truncate text-[13.5px] text-ink-2">{label}</span>
+        <span
+          className={`truncate text-[13.5px] ${transcribing ? 'italic text-ink-3' : 'text-ink-2'}`}
+        >
+          {label}
+        </span>
         {pending && (
           <span
             aria-label="Pending sync"
@@ -173,6 +190,9 @@ export default function Today() {
     if (!user) return;
     const result = await syncAll(user.id);
     if (result.ok > 0) await loadAll();
+    // Once captures are uploaded we can ask Workers AI to transcribe them.
+    const tResult = await transcribePending();
+    if (tResult.ok > 0) await loadAll();
   }, [user, loadAll]);
 
   useEffect(() => {
