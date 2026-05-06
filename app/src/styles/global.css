@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --ease: cubic-bezier(0.2, 0.7, 0.15, 1);
+    --tab-bar-h: 84px;
+    --safe-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    background: #f6f2ea;
+    color: #1a1815;
+    font-family:
+      Inter,
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    letter-spacing: -0.005em;
+  }
+
+  body {
+    margin: 0;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+  }
+
+  ::selection {
+    background: #b56b1d;
+    color: #f6f2ea;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+@layer components {
+  .display {
+    font-family: 'EB Garamond', Georgia, serif;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+  }
+
+  .mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  .eyebrow {
+    @apply mono text-[11px] tracking-[0.14em] text-ink-3;
+  }
+
+  .screen {
+    @apply flex flex-col bg-paper text-ink;
+    min-height: 100dvh;
+    padding-bottom: calc(var(--tab-bar-h) + var(--safe-bottom));
+  }
+
+  .screen-content {
+    @apply flex-1 px-6;
+    padding-top: calc(env(safe-area-inset-top, 0) + 8px);
+  }
+}

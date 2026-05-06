@@ -1,7 +1,63 @@
 # Stack tecnico — Niklaus
 
-> Versione 0.1 — stack di partenza per l'MVP. Scelte rivedibili man mano
+> Versione 0.2 — stack di partenza per l'MVP. Scelte rivedibili man mano
 > che il prodotto evolve.
+
+## Le due fasi
+
+Niklaus avrà due fasi tecniche distinte, con finalità diverse:
+
+- **Phase 0 — PWA per testing interno e validazione** (presente)
+  Una web app installabile via "Add to Home Screen" su iOS/Android.
+  Velocissima da iterare, zero attrito di distribuzione, ottima per
+  mettere il prodotto in mano a 10–50 testers in giorni invece che mesi.
+- **Phase 1 — iOS nativo per lancio commerciale** (futuro)
+  Quando il PMF è confermato, riscriviamo nativo in Swift per sbloccare
+  Apple Speech on-device, Apple Intelligence, App Store distribution e
+  pricing premium.
+
+In alternativa, dopo la Phase 0 si può valutare Capacitor per wrappare
+la PWA in un binario distribuibile in App Store senza riscrivere.
+
+---
+
+## Phase 0 — PWA (corrente)
+
+| Componente            | Scelta |
+|-----------------------|--------|
+| Framework             | **Vite + React 18 + TypeScript** |
+| Routing               | React Router 7 |
+| Styling               | Tailwind 3 + design tokens del prototipo (paper, ink, accent burnt amber) |
+| PWA                   | Manifest + service worker — install via Add to Home Screen |
+| Hosting               | Cloudflare Pages (progetto separato, root `app/`) |
+| Dominio               | `app.niklaus.app` |
+| Auth                  | Supabase Auth (Phase 0.2) |
+| DB                    | Supabase Postgres + pgvector (Phase 0.2) |
+| Audio storage         | Supabase Storage |
+| Voice recording       | MediaRecorder API (browser nativo) |
+| Trascrizione          | Whisper API (server-side via Cloudflare Function) |
+| LLM principale        | Claude (Anthropic) — server-side |
+| Embeddings            | Voyage-3 |
+
+### Cosa la PWA NON ha rispetto al native iOS
+
+- Nessun Apple Speech on-device → trascrizione cloud (Whisper)
+- Nessuna Apple Intelligence integration
+- Background recording limitato (foreground capture funziona)
+- Niente HealthKit
+- Niente App Store / niente IAP — non monetizziamo via App Store in
+  Phase 0
+- Performance ML on-device ridotta — tutto cloud
+
+Per il testing interno e la validazione di prodotto questi sono trade-off
+accettabili. Per il lancio commerciale si pivota a Phase 1.
+
+---
+
+## Phase 1 — iOS nativo (post-PMF, deferito)
+
+> Tutto quello che segue resta valido come piano per quando arriveremo
+> al lancio commerciale, dopo aver validato il prodotto in PWA.
 
 ## Decisione strategica
 
