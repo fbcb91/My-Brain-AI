@@ -8,6 +8,7 @@ Tailwind + React Router 7.
 
 ```bash
 cd app
+cp .env.example .env.local   # poi edita con le tue chiavi Supabase
 npm install
 npm run dev
 ```
@@ -15,6 +16,16 @@ npm run dev
 Apri `http://localhost:5174`. Per testare sul telefono nello stesso
 Wi-Fi: `npm run dev` ascolta su `0.0.0.0`, prendi l'IP del Mac e
 visita `http://<ip>:5174` da Safari iOS.
+
+### Variabili d'ambiente
+
+| Nome                      | Dove                          | Note |
+|---------------------------|-------------------------------|------|
+| `VITE_SUPABASE_URL`       | `.env.local` + Cloudflare Pages | URL del progetto Supabase (Project Settings → Data API) |
+| `VITE_SUPABASE_ANON_KEY`  | `.env.local` + Cloudflare Pages | Anon public key dello stesso progetto |
+
+L'anon key è progettata per essere pubblica — la sicurezza arriva
+dalle policy Row Level Security in Postgres.
 
 ## Build
 

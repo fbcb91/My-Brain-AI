@@ -1,36 +1,48 @@
+import { useAuth } from '../contexts/AuthContext';
+
 interface Section {
   title: string;
-  rows: { label: string; desc: string; status?: string }[];
+  rows: { label: string; desc: string; onClick?: () => void }[];
 }
 
-const sections: Section[] = [
-  {
-    title: 'Heritage',
-    rows: [
-      { label: 'Designate heirs', desc: 'No one designated yet' },
-      { label: 'Heritage preferences', desc: 'Defaults applied' },
-      { label: 'Time-locked messages', desc: 'None yet' },
-    ],
-  },
-  {
-    title: 'Privacy',
-    rows: [
-      { label: 'Export all my data', desc: 'Free, anytime, no questions' },
-      { label: 'What Niklaus can see', desc: 'Voice, notes' },
-      { label: 'Encryption details', desc: 'In-transit, at rest' },
-    ],
-  },
-  {
-    title: 'Account',
-    rows: [
-      { label: 'Subscription', desc: 'Free plan' },
-      { label: 'Sign out', desc: '' },
-      { label: 'Delete account', desc: '' },
-    ],
-  },
-];
-
 export default function You() {
+  const { user, signOut } = useAuth();
+
+  const sections: Section[] = [
+    {
+      title: 'Heritage',
+      rows: [
+        { label: 'Designate heirs', desc: 'No one designated yet' },
+        { label: 'Heritage preferences', desc: 'Defaults applied' },
+        { label: 'Time-locked messages', desc: 'None yet' },
+      ],
+    },
+    {
+      title: 'Privacy',
+      rows: [
+        { label: 'Export all my data', desc: 'Free, anytime, no questions' },
+        { label: 'What Niklaus can see', desc: 'Voice, notes' },
+        { label: 'Encryption details', desc: 'In-transit, at rest' },
+      ],
+    },
+    {
+      title: 'Account',
+      rows: [
+        { label: 'Subscription', desc: 'Free plan' },
+        {
+          label: 'Sign out',
+          desc: '',
+          onClick: () => {
+            void signOut();
+          },
+        },
+        { label: 'Delete account', desc: '' },
+      ],
+    },
+  ];
+
+  const initial = user?.email?.[0]?.toUpperCase() ?? 'N';
+
   return (
     <div className="screen">
       <div className="screen-content">
@@ -41,10 +53,12 @@ export default function You() {
 
         <div className="mt-6 flex items-center gap-3 rounded-2xl border border-line bg-paper-elev p-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-ink text-paper">
-            <span className="display text-xl">N</span>
+            <span className="display text-xl">{initial}</span>
           </div>
-          <div className="flex-1">
-            <p className="text-[15px] font-medium">You</p>
+          <div className="flex-1 overflow-hidden">
+            <p className="truncate text-[15px] font-medium">
+              {user?.email ?? 'Signed in'}
+            </p>
             <p className="text-xs text-ink-3">Free plan · Upgrade →</p>
           </div>
         </div>
@@ -56,15 +70,26 @@ export default function You() {
               {s.rows.map((r, i) => (
                 <li
                   key={r.label}
-                  className={`grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3.5 ${
+                  className={
                     i < s.rows.length - 1 ? 'border-b border-line' : ''
-                  }`}
+                  }
                 >
-                  <div>
-                    <p className="text-[15px] font-medium text-ink">{r.label}</p>
-                    {r.desc && <p className="mt-0.5 text-xs text-ink-3">{r.desc}</p>}
-                  </div>
-                  <span className="text-lg text-ink-3">›</span>
+                  <button
+                    type="button"
+                    onClick={r.onClick}
+                    disabled={!r.onClick}
+                    className="grid w-full grid-cols-[1fr_auto] items-center gap-3 px-4 py-3.5 text-left disabled:cursor-default"
+                  >
+                    <div>
+                      <p className="text-[15px] font-medium text-ink">
+                        {r.label}
+                      </p>
+                      {r.desc && (
+                        <p className="mt-0.5 text-xs text-ink-3">{r.desc}</p>
+                      )}
+                    </div>
+                    <span className="text-lg text-ink-3">›</span>
+                  </button>
                 </li>
               ))}
             </ul>
