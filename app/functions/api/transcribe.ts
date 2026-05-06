@@ -18,11 +18,21 @@ type PagesFunction<E> = (context: {
   env: E;
 }) => Promise<Response> | Response;
 
-const WHISPER_MODEL = '@cf/openai/whisper-large-v3-turbo';
+const WHISPER_MODEL = '@cf/openai/whisper';
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) return json({ error: 'Missing auth header' }, 401);
+
+  if (!env.AI || typeof env.AI.run !== 'function') {
+    return json(
+      {
+        error:
+          'Workers AI binding is missing. Add a binding named "AI" (type: Workers AI) to the Pages project and redeploy.',
+      },
+      500
+    );
+  }
 
   let body: { id?: string };
   try {
@@ -80,8 +90,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const result = await env.AI.run(WHISPER_MODEL, { audio: audioBytes });
     transcript = (result.text ?? '').trim();
   } catch (e) {
-    console.error('[transcribe] AI call failed', e);
-    return json({ error: 'Transcription failed' }, 500);
+    const message = e instanceof Error ? e.message : String(e);
+    console.error('[transcribe] AI call failed', message, e);
+    return json(
+      {
+        error: 'Transcription failed',
+        detail: message,
+        model: WHISPER_MODEL,
+      },
+      500
+    );
   }
 
   const { error: updateError } = await supabase
