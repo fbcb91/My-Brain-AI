@@ -34,8 +34,25 @@ export async function saveCapture(capture: Capture): Promise<void> {
 export async function listCaptures(): Promise<Capture[]> {
   const db = await getDB();
   const all = await db.getAllFromIndex('captures', 'byCreatedAt');
-  // newest first
   return all.reverse();
+}
+
+export async function listUnsynced(): Promise<Capture[]> {
+  const all = await listCaptures();
+  return all.filter((c) => !c.syncedAt);
+}
+
+export async function markSynced(
+  id: string,
+  patch: Partial<Pick<Capture, 'audioPath' | 'userId'>> = {}
+): Promise<void> {
+  const db = await getDB();
+  const cap = await db.get('captures', id);
+  if (!cap) return;
+  cap.syncedAt = Date.now();
+  if (patch.audioPath) cap.audioPath = patch.audioPath;
+  if (patch.userId && !cap.userId) cap.userId = patch.userId;
+  await db.put('captures', cap);
 }
 
 export async function deleteCapture(id: string): Promise<void> {

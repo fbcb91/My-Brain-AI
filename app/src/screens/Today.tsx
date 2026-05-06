@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Waveform from '../components/Waveform';
-import { listCaptures, saveCapture } from '../lib/db';
-import type { Capture } from '../lib/types';
+import { useAuth } from '../contexts/AuthContext';
 import { useRecorder } from '../hooks/useRecorder';
+import { listCaptures, saveCapture } from '../lib/db';
+import { syncAll } from '../lib/sync';
+import type { Capture } from '../lib/types';
 
 const fmt = (s: number) => {
   const sec = Math.max(0, Math.floor(s));
@@ -73,6 +75,7 @@ function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
     capture.kind === 'voice'
       ? capture.transcript ?? `voice · ${fmt(capture.duration ?? 0)}`
       : (capture.text ?? '');
+  const pending = !capture.syncedAt;
 
   return (
     <li className="border-b border-line">
@@ -80,7 +83,7 @@ function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
         type="button"
         onClick={onToggle}
         className="grid w-full items-center gap-2.5 py-3.5 text-left"
-        style={{ gridTemplateColumns: '46px auto 1fr' }}
+        style={{ gridTemplateColumns: '46px auto 1fr auto' }}
       >
         <span className="mono text-[11px] text-ink-3">{timeLabel(capture.createdAt)}</span>
         <span
@@ -94,6 +97,13 @@ function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
           {capture.kind === 'voice' ? '◉' : '✎'}
         </span>
         <span className="truncate text-[13.5px] text-ink-2">{label}</span>
+        {pending && (
+          <span
+            aria-label="Pending sync"
+            className="ml-2 h-1.5 w-1.5 shrink-0 rounded-full"
+            style={{ background: 'rgba(26, 24, 21, 0.25)' }}
+          />
+        )}
       </button>
       {expanded && capture.kind === 'voice' && url && (
         <div className="pb-3 pl-[58px] pr-1">
@@ -105,6 +115,7 @@ function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
 }
 
 export default function Today() {
+  const { user } = useAuth();
   const [captures, setCaptures] = useState<Capture[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -116,9 +127,22 @@ export default function Today() {
     setCaptures(all);
   }, []);
 
+  const sync = useCallback(async () => {
+    if (!user) return;
+    const result = await syncAll(user.id);
+    if (result.ok > 0) await loadAll();
+  }, [user, loadAll]);
+
   useEffect(() => {
     loadAll().finally(() => setLoaded(true));
   }, [loadAll]);
+
+  // Run an initial sync whenever a user becomes available (e.g. after sign-in
+  // or app reopen). Picks up anything left pending from a previous session.
+  useEffect(() => {
+    if (!user) return;
+    void sync();
+  }, [user, sync]);
 
   const handleStart = useCallback(() => {
     void recorder.start();
@@ -129,6 +153,7 @@ export default function Today() {
     if (!result || result.duration < 0.6) return;
     const capture: Capture = {
       id: newId(),
+      userId: user?.id,
       createdAt: Date.now(),
       kind: 'voice',
       audioBlob: result.blob,
@@ -137,7 +162,8 @@ export default function Today() {
     };
     await saveCapture(capture);
     await loadAll();
-  }, [recorder, loadAll]);
+    void sync();
+  }, [recorder, loadAll, sync, user]);
 
   const grouped = useMemo(() => {
     const groups: { label: string; items: Capture[] }[] = [];
