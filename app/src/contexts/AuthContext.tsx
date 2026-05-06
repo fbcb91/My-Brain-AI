@@ -15,10 +15,13 @@ interface AuthContextValue {
   configured: boolean;
   session: Session | null;
   user: User | null;
-  sendOtp: (email: string) => Promise<{ ok: boolean; error?: string }>;
-  verifyOtp: (
+  signIn: (
     email: string,
-    token: string
+    password: string
+  ) => Promise<{ ok: boolean; error?: string }>;
+  signUp: (
+    email: string,
+    password: string
   ) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => Promise<void>;
 }
@@ -55,17 +58,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const sendOtp = useCallback(async (email: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     if (!isSupabaseConfigured) {
       return { ok: false, error: 'Auth is not configured.' };
     }
     const trimmed = email.trim().toLowerCase();
-    if (!trimmed) {
-      return { ok: false, error: 'Enter an email.' };
+    if (!trimmed) return { ok: false, error: 'Enter an email.' };
+    if (password.length < 8) {
+      return { ok: false, error: 'Password must be at least 8 characters.' };
     }
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithPassword({
       email: trimmed,
-      options: { shouldCreateUser: true },
+      password,
     });
     if (error) {
       return { ok: false, error: error.message };
@@ -73,22 +77,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }, []);
 
-  const verifyOtp = useCallback(async (email: string, token: string) => {
+  const signUp = useCallback(async (email: string, password: string) => {
     if (!isSupabaseConfigured) {
       return { ok: false, error: 'Auth is not configured.' };
     }
     const trimmed = email.trim().toLowerCase();
-    const cleanToken = token.replace(/\s+/g, '');
-    if (cleanToken.length < 6) {
-      return { ok: false, error: 'The code is 6 digits.' };
+    if (!trimmed) return { ok: false, error: 'Enter an email.' };
+    if (password.length < 8) {
+      return { ok: false, error: 'Password must be at least 8 characters.' };
     }
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.signUp({
       email: trimmed,
-      token: cleanToken,
-      type: 'email',
+      password,
     });
     if (error) {
       return { ok: false, error: error.message };
+    }
+    // If email confirmation is disabled, signUp returns a session immediately.
+    // If still enabled, signUp succeeds but session is null until the user
+    // confirms — we surface that as a friendly hint.
+    if (!data.session) {
+      return {
+        ok: false,
+        error:
+          'Account created, but Supabase still requires email confirmation. ' +
+          'Disable it in Authentication → Providers → Email.',
+      };
     }
     return { ok: true };
   }, []);
@@ -104,11 +118,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       configured: isSupabaseConfigured,
       session,
       user: session?.user ?? null,
-      sendOtp,
-      verifyOtp,
+      signIn,
+      signUp,
       signOut,
     }),
-    [loading, session, sendOtp, verifyOtp, signOut]
+    [loading, session, signIn, signUp, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
