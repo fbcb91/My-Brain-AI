@@ -3,7 +3,7 @@ import Waveform from '../components/Waveform';
 import { useAuth } from '../contexts/AuthContext';
 import { useRecorder } from '../hooks/useRecorder';
 import { listCaptures, saveCapture } from '../lib/db';
-import { syncAll } from '../lib/sync';
+import { syncAll, pullFromServer, getOrFetchAudioBlob } from '../lib/sync';
 import type { Capture } from '../lib/types';
 
 const fmt = (s: number) => {
@@ -60,11 +60,44 @@ interface AudioRowProps {
 }
 
 function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
-  const url = useMemo(() => {
-    if (!capture.audioBlob) return null;
-    return URL.createObjectURL(capture.audioBlob);
-  }, [capture.audioBlob]);
+  const [blob, setBlob] = useState<Blob | null>(capture.audioBlob ?? null);
+  const [fetching, setFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // Sync local state when the capture prop's blob arrives (e.g. after a refresh)
+  useEffect(() => {
+    if (capture.audioBlob && capture.audioBlob !== blob) {
+      setBlob(capture.audioBlob);
+    }
+  }, [capture.audioBlob, blob]);
+
+  // Lazy-download the audio when the user expands a row that doesn't have it cached locally
+  useEffect(() => {
+    if (!expanded || blob || !capture.audioPath || fetching) return;
+    let cancelled = false;
+    setFetching(true);
+    setFetchError(null);
+    getOrFetchAudioBlob(capture)
+      .then((b) => {
+        if (cancelled) return;
+        setFetching(false);
+        if (!b) {
+          setFetchError('Audio unavailable.');
+          return;
+        }
+        setBlob(b);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFetching(false);
+        setFetchError('Audio unavailable.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [expanded, blob, capture, fetching]);
+
+  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
   useEffect(() => {
     return () => {
       if (url) URL.revokeObjectURL(url);
@@ -105,9 +138,15 @@ function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
           />
         )}
       </button>
-      {expanded && capture.kind === 'voice' && url && (
+      {expanded && capture.kind === 'voice' && (
         <div className="pb-3 pl-[58px] pr-1">
-          <audio src={url} controls preload="metadata" className="w-full" />
+          {url && <audio src={url} controls preload="metadata" className="w-full" />}
+          {!url && fetching && (
+            <p className="text-xs text-ink-3">Loading audio…</p>
+          )}
+          {!url && !fetching && fetchError && (
+            <p className="text-xs text-[#b94d2b]">{fetchError}</p>
+          )}
         </div>
       )}
     </li>
@@ -137,12 +176,26 @@ export default function Today() {
     loadAll().finally(() => setLoaded(true));
   }, [loadAll]);
 
-  // Run an initial sync whenever a user becomes available (e.g. after sign-in
-  // or app reopen). Picks up anything left pending from a previous session.
+  // When a user becomes available (sign-in or app reopen), pull anything new
+  // from the server first, then push any local-only pending captures up.
   useEffect(() => {
     if (!user) return;
-    void sync();
-  }, [user, sync]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const { added } = await pullFromServer();
+        if (cancelled) return;
+        if (added > 0) await loadAll();
+      } catch (e) {
+        console.error('[pull] failed', e);
+      }
+      if (cancelled) return;
+      void sync();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, sync, loadAll]);
 
   const handleStart = useCallback(() => {
     void recorder.start();

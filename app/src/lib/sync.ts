@@ -1,4 +1,4 @@
-import { listUnsynced, markSynced } from './db';
+import { listUnsynced, listCaptures, markSynced, saveCapture } from './db';
 import { supabase } from './supabase';
 import type { Capture } from './types';
 
@@ -25,7 +25,6 @@ export async function uploadCapture(
 ): Promise<void> {
   let audioPath: string | undefined = capture.audioPath;
 
-  // 1) For voice captures, upload the blob to Storage first
   if (capture.kind === 'voice' && capture.audioBlob && !audioPath) {
     const ext = extForMime(capture.mimeType);
     audioPath = `${userId}/${capture.id}.${ext}`;
@@ -36,7 +35,6 @@ export async function uploadCapture(
         upsert: false,
       });
     if (error) {
-      // If the file already exists (idempotent retry), keep going. Otherwise re-throw.
       const message = error.message.toLowerCase();
       const isAlreadyExists =
         message.includes('already exists') || message.includes('duplicate');
@@ -44,7 +42,6 @@ export async function uploadCapture(
     }
   }
 
-  // 2) Insert (or upsert) the metadata row
   const { error: insertError } = await supabase.from('captures').upsert(
     {
       id: capture.id,
@@ -60,7 +57,6 @@ export async function uploadCapture(
     { onConflict: 'id' }
   );
   if (insertError) {
-    // If we just uploaded a fresh file but the row insert failed, try to clean up.
     if (audioPath && !capture.audioPath) {
       await supabase.storage.from(BUCKET).remove([audioPath]).catch(() => {});
     }
@@ -84,4 +80,81 @@ export async function syncAll(userId: string): Promise<SyncResult> {
     }
   }
   return { ok, failed };
+}
+
+interface ServerRow {
+  id: string;
+  user_id: string;
+  kind: 'voice' | 'note';
+  created_at: string;
+  duration_seconds: number | null;
+  mime_type: string | null;
+  audio_path: string | null;
+  text: string | null;
+  transcript: string | null;
+}
+
+function rowToCapture(row: ServerRow): Capture {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    createdAt: new Date(row.created_at).getTime(),
+    kind: row.kind,
+    duration: row.duration_seconds ?? undefined,
+    mimeType: row.mime_type ?? undefined,
+    audioPath: row.audio_path ?? undefined,
+    text: row.text ?? undefined,
+    transcript: row.transcript ?? undefined,
+    syncedAt: Date.now(),
+    // audioBlob intentionally omitted — fetched lazily when the user expands a row
+  };
+}
+
+/**
+ * Pulls every capture row from Supabase for the current user and adds any
+ * that aren't yet in the local IndexedDB. Audio blobs are not downloaded
+ * here — they're fetched on demand from `getOrFetchAudioBlob` when the
+ * user actually plays a clip.
+ */
+export async function pullFromServer(): Promise<{ added: number }> {
+  const { data, error } = await supabase
+    .from('captures')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  const rows = (data as ServerRow[]) ?? [];
+
+  const local = await listCaptures();
+  const localIds = new Set(local.map((c) => c.id));
+
+  let added = 0;
+  for (const row of rows) {
+    if (localIds.has(row.id)) continue;
+    await saveCapture(rowToCapture(row));
+    added++;
+  }
+  return { added };
+}
+
+/**
+ * Returns the audio blob for a capture, downloading from Supabase Storage
+ * if it's not already cached locally. Caches the blob in IndexedDB on the
+ * way back so subsequent playbacks are instant and offline-friendly.
+ */
+export async function getOrFetchAudioBlob(
+  capture: Capture
+): Promise<Blob | null> {
+  if (capture.audioBlob) return capture.audioBlob;
+  if (!capture.audioPath) return null;
+
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .download(capture.audioPath);
+  if (error || !data) {
+    console.error('[storage] download failed', error);
+    return null;
+  }
+
+  await saveCapture({ ...capture, audioBlob: data });
+  return data;
 }
