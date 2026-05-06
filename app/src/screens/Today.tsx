@@ -66,14 +66,16 @@ function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
 
   // Sync local state when the capture prop's blob arrives (e.g. after a refresh)
   useEffect(() => {
-    if (capture.audioBlob && capture.audioBlob !== blob) {
-      setBlob(capture.audioBlob);
-    }
-  }, [capture.audioBlob, blob]);
+    if (capture.audioBlob) setBlob(capture.audioBlob);
+  }, [capture.audioBlob]);
 
-  // Lazy-download the audio when the user expands a row that doesn't have it cached locally
+  // Lazy-download the audio the first time the user expands a row that doesn't
+  // have it cached locally. We deliberately don't include `fetching` or the
+  // full `capture` object in the deps: state updates inside this effect would
+  // otherwise cancel the in-flight download via the cleanup before it can
+  // finish.
   useEffect(() => {
-    if (!expanded || blob || !capture.audioPath || fetching) return;
+    if (!expanded || blob || !capture.audioPath) return;
     let cancelled = false;
     setFetching(true);
     setFetchError(null);
@@ -95,7 +97,8 @@ function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
     return () => {
       cancelled = true;
     };
-  }, [expanded, blob, capture, fetching]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, blob, capture.id, capture.audioPath]);
 
   const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
   useEffect(() => {
