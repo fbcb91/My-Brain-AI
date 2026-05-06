@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
+import CodeInput from '../components/CodeInput';
 import { useAuth } from '../contexts/AuthContext';
 
 type Step = 'email' | 'code';
@@ -13,15 +14,10 @@ export default function SignIn() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const codeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) navigate('/today', { replace: true });
   }, [user, navigate]);
-
-  useEffect(() => {
-    if (step === 'code') codeInputRef.current?.focus();
-  }, [step]);
 
   async function onSubmitEmail(e: React.FormEvent) {
     e.preventDefault();
@@ -116,21 +112,7 @@ export default function SignIn() {
                 Enter the code we sent to<br />
                 <span className="text-accent">{email}</span>
               </label>
-              <input
-                ref={codeInputRef}
-                type="text"
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                autoComplete="one-time-code"
-                required
-                placeholder="000000"
-                value={code}
-                onChange={(e) =>
-                  setCode(e.target.value.replace(/\D/g, '').slice(0, 6))
-                }
-                className="mono border-b border-ink bg-transparent py-3 text-center text-[28px] tracking-[0.4em] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
-              />
+              <CodeInput value={code} onChange={setCode} autoFocus />
               <button
                 type="submit"
                 disabled={busy || code.length !== 6}
