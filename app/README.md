@@ -19,13 +19,15 @@ visita `http://<ip>:5174` da Safari iOS.
 
 ### Variabili d'ambiente
 
-| Nome                      | Dove                          | Note |
-|---------------------------|-------------------------------|------|
-| `VITE_SUPABASE_URL`       | `.env.local` + Cloudflare Pages | URL del progetto Supabase (Project Settings → Data API) |
-| `VITE_SUPABASE_ANON_KEY`  | `.env.local` + Cloudflare Pages | Anon public key dello stesso progetto |
+| Nome                      | Tipo       | Dove                          | Note |
+|---------------------------|------------|-------------------------------|------|
+| `VITE_SUPABASE_URL`       | Plaintext  | `.env.local` + Cloudflare Pages | URL del progetto Supabase (Project Settings → Data API) |
+| `VITE_SUPABASE_ANON_KEY`  | Secret     | `.env.local` + Cloudflare Pages | Anon public key dello stesso progetto |
+| `ANTHROPIC_API_KEY`       | Secret     | Cloudflare Pages              | Chiave Anthropic per `/api/chat`. Senza, la Memory chat risponde 500 |
 
-L'anon key è progettata per essere pubblica — la sicurezza arriva
-dalle policy Row Level Security in Postgres.
+L'anon key di Supabase è progettata per essere pubblica — la sicurezza
+arriva dalle policy Row Level Security in Postgres. La chiave Anthropic
+invece **deve** essere Secret: chi ce l'ha può consumare il tuo credito.
 
 ### Bindings Cloudflare Pages
 

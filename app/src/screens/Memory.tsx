@@ -1,86 +1,119 @@
 import { useEffect, useRef, useState } from 'react';
+import { sendChatMessage, type ChatMessage } from '../lib/chat';
+import { listCaptures } from '../lib/db';
+import type { Capture } from '../lib/types';
 
-interface QA {
-  q: string;
-  a: string;
-  sources: { date: string; kind: 'voice' | 'note' }[];
+interface SourceCitation {
+  id: string;
+  date: string;
+  kind: 'voice' | 'note';
 }
 
-const SAMPLE_QA: QA[] = [
-  {
-    q: 'What was I worried about last week?',
-    a: 'On April 28 you mentioned that Marco was stressed about the new project. You also said you were proud of how he handled the meeting on Friday — you wrote that you felt "finally, someone gets it."',
-    sources: [
-      { date: 'Apr 28, 18:42', kind: 'voice' },
-      { date: 'May 1, 09:10', kind: 'note' },
-    ],
-  },
-  {
-    q: 'What did I say about my mom?',
-    a: "You spoke about her three times this month. The clearest moment was April 12, after the phone call — you said you wanted to call her more often, and that you'd been thinking about the summer in Sicily.",
-    sources: [
-      { date: 'Apr 12, 21:14', kind: 'voice' },
-      { date: 'Apr 23, 08:30', kind: 'note' },
-    ],
-  },
-  {
-    q: 'Have I been sleeping well?',
-    a: "I don't have anything from you about that. You haven't shared anything about sleep this month — you might want to mention it next time we talk.",
-    sources: [],
-  },
-];
-
-interface Message {
+interface UiMessage {
   role: 'user' | 'assistant';
   text: string;
-  sources?: { date: string; kind: 'voice' | 'note' }[];
+  sources?: SourceCitation[];
+}
+
+const SUGGESTIONS = [
+  'What did I say last week?',
+  'Summarize my recent thoughts.',
+  'What have I been worried about?',
+];
+
+function formatSourceLabel(c: Capture): string {
+  const d = new Date(c.createdAt);
+  const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return `${date}, ${time}`;
 }
 
 export default function Memory() {
-  const [convo, setConvo] = useState<Message[]>([]);
+  const [convo, setConvo] = useState<UiMessage[]>([]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [captures, setCaptures] = useState<Capture[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    void listCaptures().then(setCaptures);
+  }, []);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [convo, thinking]);
 
-  function send(query?: string) {
-    const q = (query ?? input).trim();
-    if (!q || thinking) return;
-    setInput('');
-    setConvo((c) => [...c, { role: 'user', text: q }]);
-    setThinking(true);
-    const match =
-      SAMPLE_QA.find((s) => s.q.toLowerCase() === q.toLowerCase()) ||
-      SAMPLE_QA[Math.floor(Math.random() * SAMPLE_QA.length)];
-    setTimeout(
-      () => {
-        setThinking(false);
-        setConvo((c) => [...c, { role: 'assistant', text: match.a, sources: match.sources }]);
-      },
-      1000 + Math.random() * 600
-    );
+  function resolveSources(ids: string[]): SourceCitation[] {
+    const out: SourceCitation[] = [];
+    for (const id of ids) {
+      const cap = captures.find((c) => c.id === id);
+      if (!cap) continue;
+      out.push({ id, date: formatSourceLabel(cap), kind: cap.kind });
+    }
+    return out;
   }
 
-  const suggestions = SAMPLE_QA.map((s) => s.q);
+  async function send(query?: string) {
+    const q = (query ?? input).trim();
+    if (!q || thinking) return;
+
+    setInput('');
+    setError(null);
+
+    const nextConvo: UiMessage[] = [...convo, { role: 'user', text: q }];
+    setConvo(nextConvo);
+    setThinking(true);
+
+    const apiMessages: ChatMessage[] = nextConvo.map((m) => ({
+      role: m.role,
+      content: m.text,
+    }));
+
+    try {
+      const response = await sendChatMessage(apiMessages);
+      setConvo((c) => [
+        ...c,
+        {
+          role: 'assistant',
+          text: response.text,
+          sources: resolveSources(response.sources),
+        },
+      ]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setThinking(false);
+    }
+  }
 
   return (
     <div className="screen">
-      <header className="px-6 pb-3 pt-4" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0) + 16px)' }}>
+      <header
+        className="px-6 pb-3 pt-4"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0) + 16px)' }}
+      >
         <p className="eyebrow">Memory</p>
         <h1 className="display mt-1.5 text-[28px] leading-[1.05]">
           Ask anything you've shared
         </h1>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-auto border-t border-line px-6 py-5">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-auto border-t border-line px-6 py-5"
+      >
         {convo.length === 0 && (
           <div>
             <p className="eyebrow mb-2">Try</p>
             <div className="flex flex-col gap-2">
-              {suggestions.map((q) => (
+              {SUGGESTIONS.map((q) => (
                 <button
                   key={q}
                   onClick={() => send(q)}
@@ -101,13 +134,17 @@ export default function Memory() {
               </div>
             ) : (
               <div>
-                <p className="mono text-[10px] tracking-[0.14em] text-accent">Niklaus</p>
-                <p className="display mb-2.5 mt-1.5 text-[15px] leading-relaxed">{m.text}</p>
+                <p className="mono text-[10px] tracking-[0.14em] text-accent">
+                  Niklaus
+                </p>
+                <p className="display mb-2.5 mt-1.5 whitespace-pre-wrap text-[15px] leading-relaxed">
+                  {m.text}
+                </p>
                 {m.sources && m.sources.length > 0 && (
                   <div className="flex flex-col gap-1.5">
-                    {m.sources.map((s, j) => (
+                    {m.sources.map((s) => (
                       <span
-                        key={j}
+                        key={s.id}
                         className="mono inline-flex w-fit items-center gap-2 rounded-[10px] border border-line bg-paper-elev px-3 py-2 text-[11.5px] tracking-normal normal-case text-ink-2"
                       >
                         <span className="text-accent">▶</span>
@@ -141,12 +178,16 @@ export default function Memory() {
             </style>
           </div>
         )}
+
+        {error && (
+          <p className="mt-3 text-xs text-[#b94d2b]">{error}</p>
+        )}
       </div>
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          send();
+          void send();
         }}
         className="border-t border-line px-6 py-3"
       >
@@ -155,14 +196,16 @@ export default function Memory() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask anything..."
-            className="min-w-0 flex-1 border-0 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-3"
+            disabled={thinking}
+            className="min-w-0 flex-1 border-0 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-3 disabled:opacity-60"
           />
           <button
             type="submit"
-            className="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+            disabled={thinking || !input.trim()}
+            className="flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:opacity-50"
             style={{
-              background: input.trim() ? '#b56b1d' : '#ece6d8',
-              color: input.trim() ? '#f6f2ea' : '#807872',
+              background: input.trim() && !thinking ? '#b56b1d' : '#ece6d8',
+              color: input.trim() && !thinking ? '#f6f2ea' : '#807872',
             }}
           >
             <svg
