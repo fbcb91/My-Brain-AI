@@ -1,4 +1,10 @@
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  type DailyQuestionTime,
+  getDailyQuestionTime,
+  setDailyQuestionTime,
+} from '../lib/preferences';
 
 interface Section {
   title: string;
@@ -7,6 +13,14 @@ interface Section {
 
 export default function You() {
   const { user, signOut } = useAuth();
+  const [questionTime, setQuestionTimeState] = useState<DailyQuestionTime>(() =>
+    getDailyQuestionTime()
+  );
+
+  function setQuestionTime(value: DailyQuestionTime) {
+    setDailyQuestionTime(value);
+    setQuestionTimeState(value);
+  }
 
   const sections: Section[] = [
     {
@@ -62,6 +76,55 @@ export default function You() {
             <p className="text-xs text-ink-3">Free plan · Upgrade →</p>
           </div>
         </div>
+
+        <section className="mt-7">
+          <p className="eyebrow mb-2">Daily question</p>
+          <div className="rounded-2xl border border-line bg-paper-elev p-4">
+            <p className="text-[15px] font-medium text-ink">
+              When should Niklaus ask?
+            </p>
+            <p className="mt-0.5 text-xs text-ink-3">
+              The question card on Today appears after this time.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setQuestionTime('morning')}
+                className="flex-1 rounded-full px-4 py-2.5 text-[14px] font-medium transition-colors"
+                style={{
+                  background: questionTime === 'morning' ? '#1a1815' : 'transparent',
+                  color: questionTime === 'morning' ? '#f6f2ea' : '#4b4640',
+                  border:
+                    questionTime === 'morning'
+                      ? '1px solid #1a1815'
+                      : '1px solid rgba(26, 24, 21, 0.18)',
+                }}
+              >
+                Morning
+              </button>
+              <button
+                type="button"
+                onClick={() => setQuestionTime('evening')}
+                className="flex-1 rounded-full px-4 py-2.5 text-[14px] font-medium transition-colors"
+                style={{
+                  background: questionTime === 'evening' ? '#1a1815' : 'transparent',
+                  color: questionTime === 'evening' ? '#f6f2ea' : '#4b4640',
+                  border:
+                    questionTime === 'evening'
+                      ? '1px solid #1a1815'
+                      : '1px solid rgba(26, 24, 21, 0.18)',
+                }}
+              >
+                Evening
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-ink-3">
+              {questionTime === 'morning'
+                ? 'You\'ll see today\'s question after 6:00 AM.'
+                : 'You\'ll see today\'s question after 6:00 PM.'}
+            </p>
+          </div>
+        </section>
 
         {sections.map((s) => (
           <section key={s.title} className="mt-7">

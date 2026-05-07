@@ -5,6 +5,7 @@ import Waveform from '../components/Waveform';
 import { useAuth } from '../contexts/AuthContext';
 import { useRecorder } from '../hooks/useRecorder';
 import { listCaptures, saveCapture } from '../lib/db';
+import { isWithinPreferredWindow } from '../lib/preferences';
 import {
   hasAnsweredToday,
   isQuestionSkippedToday,
@@ -295,6 +296,7 @@ export default function Today() {
   const showDailyQuestion = useMemo(() => {
     if (questionSkipped) return false;
     if (hasAnsweredToday(captures, question)) return false;
+    if (!isWithinPreferredWindow()) return false;
     return true;
   }, [captures, question, questionSkipped]);
 
