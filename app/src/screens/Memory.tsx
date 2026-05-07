@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { sendChatMessage, type ChatMessage } from '../lib/chat';
 import { listCaptures } from '../lib/db';
 import type { Capture } from '../lib/types';
@@ -32,13 +33,55 @@ function formatSourceLabel(c: Capture): string {
   return `${date}, ${time}`;
 }
 
+function storageKey(userId: string | undefined): string | null {
+  if (!userId) return null;
+  return `niklaus_chat_${userId}`;
+}
+
+function loadConvo(userId: string | undefined): UiMessage[] {
+  const key = storageKey(userId);
+  if (!key) return [];
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as UiMessage[];
+  } catch {
+    return [];
+  }
+}
+
+function saveConvoToStorage(userId: string | undefined, convo: UiMessage[]): void {
+  const key = storageKey(userId);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(convo));
+  } catch {
+    // localStorage full or unavailable — fail silently
+  }
+}
+
 export default function Memory() {
-  const [convo, setConvo] = useState<UiMessage[]>([]);
+  const { user } = useAuth();
+  const userId = user?.id;
+  const [convo, setConvo] = useState<UiMessage[]>(() => loadConvo(userId));
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [captures, setCaptures] = useState<Capture[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Reload conversation when the signed-in user changes (e.g. after sign-in)
+  useEffect(() => {
+    setConvo(loadConvo(userId));
+  }, [userId]);
+
+  // Persist conversation locally on every change so we survive refreshes,
+  // tab switches, and PWA restarts.
+  useEffect(() => {
+    saveConvoToStorage(userId, convo);
+  }, [userId, convo]);
 
   useEffect(() => {
     void listCaptures().then(setCaptures);
@@ -58,6 +101,12 @@ export default function Memory() {
       out.push({ id, date: formatSourceLabel(cap), kind: cap.kind });
     }
     return out;
+  }
+
+  function clearConvo() {
+    setConvo([]);
+    setError(null);
+    setInput('');
   }
 
   async function send(query?: string) {
@@ -96,13 +145,24 @@ export default function Memory() {
   return (
     <div className="screen">
       <header
-        className="px-6 pb-3 pt-4"
+        className="flex items-start justify-between gap-3 px-6 pb-3 pt-4"
         style={{ paddingTop: 'calc(env(safe-area-inset-top, 0) + 16px)' }}
       >
-        <p className="eyebrow">Memory</p>
-        <h1 className="display mt-1.5 text-[28px] leading-[1.05]">
-          Ask anything you've shared
-        </h1>
+        <div>
+          <p className="eyebrow">Memory</p>
+          <h1 className="display mt-1.5 text-[28px] leading-[1.05]">
+            Ask anything you've shared
+          </h1>
+        </div>
+        {convo.length > 0 && (
+          <button
+            type="button"
+            onClick={clearConvo}
+            className="mt-2 shrink-0 text-xs text-ink-3 underline-offset-2 hover:text-ink hover:underline"
+          >
+            New chat
+          </button>
+        )}
       </header>
 
       <div

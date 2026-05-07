@@ -118,6 +118,30 @@ in queste 4 settimane stai facendo 1.2". Tono: nessun shaming, nessun
 Questa feature è il principale moltiplicatore di valore percepito post-MVP
 e giustifica da sola la fascia Legacy.
 
+**Conversazioni come memoria** — le chat tra utente e Niklaus *sono*
+parte della memoria, non un canale separato. Le domande che fai
+rivelano cosa stai cercando in te stesso; i follow-up dicono cosa ti
+interessa davvero; le reazioni a una risposta ("non è quello", "ma
+quando?") sono meta-feedback su quanto Niklaus ti capisce. Ogni
+scambio è un mini-self-report.
+
+Implicazioni architetturali (post-MVP):
+- Ogni messaggio utente entra nel sistema di memoria (separato dai
+  capture per natura, ma indicizzato e interrogabile come loro).
+- Le chat recenti diventano contesto per le nuove chat — Niklaus
+  ricorda di cosa abbiamo già parlato.
+- Embeddings su chat + capture insieme → la retrieval pesca da
+  entrambi.
+- Le Daily Question si generano (anche) da pattern emersi nelle
+  chat ricenti, non solo dai gap nei capture.
+- Privacy: le chat sono dato sensibile come i capture, stesso regime
+  di esportazione, cancellazione, cifratura, eredità.
+
+In MVP la chat è persistita solo localmente (single rolling
+conversation per utente, IndexedDB / localStorage). Da Phase 3 in
+avanti diventa cloud-first, multi-conversazione e parte attiva del
+modello di memoria.
+
 ## 6. Caso d'uso cuore: l'eredità digitale
 
 Il cuore emotivo e commerciale del prodotto.
