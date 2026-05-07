@@ -178,6 +178,9 @@ export default function Today() {
   const [captures, setCaptures] = useState<Capture[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [textMode, setTextMode] = useState(false);
+  const [textValue, setTextValue] = useState('');
+  const [savingText, setSavingText] = useState(false);
 
   const recorder = useRecorder();
 
@@ -241,6 +244,30 @@ export default function Today() {
     void sync();
   }, [recorder, loadAll, sync, user]);
 
+  const cancelText = useCallback(() => {
+    setTextMode(false);
+    setTextValue('');
+  }, []);
+
+  const saveText = useCallback(async () => {
+    const text = textValue.trim();
+    if (!text || savingText) return;
+    setSavingText(true);
+    const capture: Capture = {
+      id: newId(),
+      userId: user?.id,
+      createdAt: Date.now(),
+      kind: 'note',
+      text,
+    };
+    await saveCapture(capture);
+    setTextValue('');
+    setTextMode(false);
+    setSavingText(false);
+    await loadAll();
+    void sync();
+  }, [textValue, savingText, user, loadAll, sync]);
+
   const grouped = useMemo(() => {
     const groups: { label: string; items: Capture[] }[] = [];
     let currentLabel = '';
@@ -263,73 +290,127 @@ export default function Today() {
           <h1 className="display mt-1.5 text-[34px] leading-[1.05]">Today</h1>
         </header>
 
-        <button
-          type="button"
-          onPointerDown={(e) => {
-            e.preventDefault();
-            handleStart();
-          }}
-          onPointerUp={() => {
-            void handleStop();
-          }}
-          onPointerLeave={() => {
-            if (recorder.isRecording) void handleStop();
-          }}
-          onPointerCancel={() => recorder.cancel()}
-          onContextMenu={(e) => e.preventDefault()}
-          className="mt-6 flex w-full select-none flex-col items-center gap-3 rounded-3xl border px-5 py-7 transition-all"
-          style={{
-            background: recorder.isRecording ? 'rgba(181, 107, 29, 0.12)' : '#fbf8f2',
-            borderColor: recorder.isRecording ? '#b56b1d' : 'rgba(26, 24, 21, 0.10)',
-            touchAction: 'none',
-          }}
-        >
-          <span
-            className="flex h-16 w-16 items-center justify-center rounded-full transition-all"
+        {textMode ? (
+          <div
+            className="mt-6 flex w-full flex-col rounded-3xl border bg-paper-elev px-5 py-5 transition-all"
+            style={{ borderColor: 'rgba(26, 24, 21, 0.18)' }}
+          >
+            <textarea
+              autoFocus
+              value={textValue}
+              onChange={(e) => setTextValue(e.target.value)}
+              placeholder="What's on your mind?"
+              rows={5}
+              className="w-full resize-none bg-transparent text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-3"
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  void saveText();
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cancelText();
+                }
+              }}
+            />
+            <div className="mt-3 flex items-center justify-end gap-2 border-t border-line pt-3">
+              <button
+                type="button"
+                onClick={cancelText}
+                disabled={savingText}
+                className="rounded-full px-4 py-2 text-[13px] text-ink-2 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveText()}
+                disabled={!textValue.trim() || savingText}
+                className="rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-paper transition-opacity disabled:opacity-50"
+              >
+                {savingText ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="mt-6 flex w-full flex-col items-center gap-3 rounded-3xl border px-5 py-7 transition-all"
             style={{
-              background: recorder.isRecording ? '#b56b1d' : '#1a1815',
-              transform: recorder.isRecording ? 'scale(1.08)' : 'scale(1)',
-              boxShadow: recorder.isRecording
-                ? '0 0 0 8px rgba(181, 107, 29, 0.12)'
-                : 'none',
+              background: recorder.isRecording ? 'rgba(181, 107, 29, 0.12)' : '#fbf8f2',
+              borderColor: recorder.isRecording ? '#b56b1d' : 'rgba(26, 24, 21, 0.10)',
             }}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="#f6f2ea">
-              <rect x="9" y="3" width="6" height="13" rx="3" />
-              <path
-                d="M5 11a7 7 0 0014 0M12 18v3"
-                stroke="#f6f2ea"
-                strokeWidth="1.6"
-                fill="none"
-                strokeLinecap="round"
-              />
-            </svg>
-          </span>
-          {recorder.isRecording ? (
-            <>
-              <Waveform />
-              <span className="mono text-[13px] tracking-[0.05em] text-accent">
-                ● Recording {fmt(recorder.duration)}
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                handleStart();
+              }}
+              onPointerUp={() => {
+                void handleStop();
+              }}
+              onPointerLeave={() => {
+                if (recorder.isRecording) void handleStop();
+              }}
+              onPointerCancel={() => recorder.cancel()}
+              onContextMenu={(e) => e.preventDefault()}
+              className="flex w-full select-none flex-col items-center gap-3"
+              style={{ touchAction: 'none' }}
+            >
+              <span
+                className="flex h-16 w-16 items-center justify-center rounded-full transition-all"
+                style={{
+                  background: recorder.isRecording ? '#b56b1d' : '#1a1815',
+                  transform: recorder.isRecording ? 'scale(1.08)' : 'scale(1)',
+                  boxShadow: recorder.isRecording
+                    ? '0 0 0 8px rgba(181, 107, 29, 0.12)'
+                    : 'none',
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#f6f2ea">
+                  <rect x="9" y="3" width="6" height="13" rx="3" />
+                  <path
+                    d="M5 11a7 7 0 0014 0M12 18v3"
+                    stroke="#f6f2ea"
+                    strokeWidth="1.6"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </span>
-              <span className="text-xs text-ink-3">Release to save</span>
-            </>
-          ) : (
-            <>
-              <span className="display text-lg font-medium">Hold to record</span>
-              <span className="text-xs text-ink-3">or tap to type</span>
-            </>
-          )}
-        </button>
+              {recorder.isRecording ? (
+                <>
+                  <Waveform />
+                  <span className="mono text-[13px] tracking-[0.05em] text-accent">
+                    ● Recording {fmt(recorder.duration)}
+                  </span>
+                  <span className="text-xs text-ink-3">Release to save</span>
+                </>
+              ) : (
+                <span className="display text-lg font-medium">Hold to record</span>
+              )}
+            </button>
+            {!recorder.isRecording && (
+              <button
+                type="button"
+                onClick={() => setTextMode(true)}
+                className="text-xs text-ink-3 underline-offset-2 hover:underline"
+              >
+                or tap to type
+              </button>
+            )}
+          </div>
+        )}
 
         {recorder.error && (
           <p className="mt-3 text-center text-xs text-[#b94d2b]">{recorder.error}</p>
         )}
 
-        {loaded && captures.length === 0 && !recorder.isRecording && (
+        {loaded && captures.length === 0 && !recorder.isRecording && !textMode && (
           <div className="mt-10 text-center">
             <p className="display text-lg text-ink-2">Nothing here yet.</p>
             <p className="mt-2 text-sm text-ink-3">
-              Press and hold the button above to record your first thought.
+              Hold the button to record, or tap to type your first thought.
             </p>
           </div>
         )}
