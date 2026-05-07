@@ -12,7 +12,12 @@ import {
   markQuestionSkippedToday,
   todaysQuestion,
 } from '../lib/questions';
-import { syncAll, pullFromServer, getOrFetchAudioBlob } from '../lib/sync';
+import {
+  syncAll,
+  pullFromServer,
+  getOrFetchAudioBlob,
+  deleteCaptureFully,
+} from '../lib/sync';
 import { transcribePending } from '../lib/transcribe';
 import { isLikelyHallucination } from '../lib/transcript-quality';
 import type { Capture } from '../lib/types';
@@ -80,16 +85,91 @@ function isTranscribing(c: Capture): boolean {
   );
 }
 
+interface DaySectionProps {
+  group: { label: string; items: Capture[] };
+  expanded: boolean;
+  collapsible: boolean;
+  onToggle: () => void;
+  expandedId: string | null;
+  setExpandedId: (updater: (cur: string | null) => string | null) => void;
+  onDelete: (capture: Capture) => Promise<void> | void;
+}
+
+function DaySection({
+  group,
+  expanded,
+  collapsible,
+  onToggle,
+  expandedId,
+  setExpandedId,
+  onDelete,
+}: DaySectionProps) {
+  const countLabel = `${group.items.length} ${
+    group.items.length === 1 ? 'capture' : 'captures'
+  }`;
+
+  return (
+    <section className="mt-7">
+      <button
+        type="button"
+        onClick={collapsible ? onToggle : undefined}
+        disabled={!collapsible}
+        className="mb-2 flex w-full items-baseline justify-between disabled:cursor-default"
+      >
+        <span className="flex items-baseline gap-2">
+          <span className="eyebrow">{group.label}</span>
+          {collapsible && (
+            <span
+              aria-hidden="true"
+              className="text-[10px] text-ink-3 transition-transform"
+              style={{
+                display: 'inline-block',
+                transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+              }}
+            >
+              ›
+            </span>
+          )}
+        </span>
+        <span className="text-xs text-ink-3">{countLabel}</span>
+      </button>
+      {expanded && (
+        <ul className="flex flex-col border-t border-line">
+          {group.items.map((c) => (
+            <AudioRow
+              key={c.id}
+              capture={c}
+              expanded={expandedId === c.id}
+              onToggle={() =>
+                setExpandedId((cur) => (cur === c.id ? null : c.id))
+              }
+              onDelete={onDelete}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 interface AudioRowProps {
   capture: Capture;
   expanded: boolean;
   onToggle: () => void;
+  onDelete: (capture: Capture) => Promise<void> | void;
 }
 
-function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
+function AudioRow({ capture, expanded, onToggle, onDelete }: AudioRowProps) {
   const [blob, setBlob] = useState<Blob | null>(capture.audioBlob ?? null);
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Reset the confirm state when the row collapses, so reopening starts fresh.
+  useEffect(() => {
+    if (!expanded) setConfirming(false);
+  }, [expanded]);
 
   // Sync local state when the capture prop's blob arrives (e.g. after a refresh)
   useEffect(() => {
@@ -170,14 +250,59 @@ function AudioRow({ capture, expanded, onToggle }: AudioRowProps) {
           />
         )}
       </button>
-      {expanded && capture.kind === 'voice' && (
-        <div className="pb-3 pl-[58px] pr-1">
-          {url && <audio src={url} controls preload="metadata" className="w-full" />}
-          {!url && fetching && (
-            <p className="text-xs text-ink-3">Loading audio…</p>
+      {expanded && (
+        <div className="space-y-3 pb-3 pl-[58px] pr-1">
+          {capture.kind === 'voice' && (
+            <>
+              {url && (
+                <audio src={url} controls preload="metadata" className="w-full" />
+              )}
+              {!url && fetching && (
+                <p className="text-xs text-ink-3">Loading audio…</p>
+              )}
+              {!url && !fetching && fetchError && (
+                <p className="text-xs text-[#b94d2b]">{fetchError}</p>
+              )}
+            </>
           )}
-          {!url && !fetching && fetchError && (
-            <p className="text-xs text-[#b94d2b]">{fetchError}</p>
+          {!confirming ? (
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              disabled={deleting}
+              className="text-xs text-ink-3 underline-offset-2 hover:text-[#b94d2b] hover:underline disabled:opacity-50"
+            >
+              Delete
+            </button>
+          ) : (
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-ink-2">Delete this capture?</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await onDelete(capture);
+                  } catch (e) {
+                    console.error('[delete] failed', e);
+                    setDeleting(false);
+                    setConfirming(false);
+                  }
+                }}
+                disabled={deleting}
+                className="font-medium text-[#b94d2b] hover:underline disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                disabled={deleting}
+                className="text-ink-3 hover:text-ink-2 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -197,6 +322,17 @@ export default function Today() {
   const [questionSkipped, setQuestionSkipped] = useState(() =>
     isQuestionSkippedToday()
   );
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set());
+  const [showOlderDays, setShowOlderDays] = useState(false);
+
+  const toggleDay = useCallback((label: string) => {
+    setExpandedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }, []);
 
   const recorder = useRecorder();
   const question = useMemo(() => todaysQuestion(), []);
@@ -243,6 +379,21 @@ export default function Today() {
   const handleStart = useCallback(() => {
     void recorder.start();
   }, [recorder]);
+
+  const handleDelete = useCallback(
+    async (cap: Capture) => {
+      // Optimistic removal so the UI feels instant.
+      setCaptures((cs) => cs.filter((c) => c.id !== cap.id));
+      setExpandedId((cur) => (cur === cap.id ? null : cur));
+      try {
+        await deleteCaptureFully(cap);
+      } catch (e) {
+        console.error('[delete] failed, restoring local row', e);
+        await loadAll();
+      }
+    },
+    [loadAll]
+  );
 
   const handleStop = useCallback(async () => {
     const result = await recorder.stop();
@@ -460,26 +611,46 @@ export default function Today() {
           </div>
         )}
 
-        {grouped.map((group) => (
-          <section key={group.label} className="mt-7">
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="eyebrow">{group.label}</span>
-              <span className="text-xs text-ink-3">
-                {group.items.length} {group.items.length === 1 ? 'capture' : 'captures'}
-              </span>
-            </div>
-            <ul className="flex flex-col border-t border-line">
-              {group.items.map((c) => (
-                <AudioRow
-                  key={c.id}
-                  capture={c}
-                  expanded={expandedId === c.id}
-                  onToggle={() => setExpandedId((cur) => (cur === c.id ? null : c.id))}
-                />
-              ))}
-            </ul>
-          </section>
+        {grouped.slice(0, 7).map((group, idx) => (
+          <DaySection
+            key={group.label}
+            group={group}
+            expanded={idx === 0 || expandedDays.has(group.label)}
+            collapsible={idx > 0}
+            onToggle={() => toggleDay(group.label)}
+            expandedId={expandedId}
+            setExpandedId={setExpandedId}
+            onDelete={handleDelete}
+          />
         ))}
+
+        {grouped.length > 7 && !showOlderDays && (
+          <button
+            type="button"
+            onClick={() => setShowOlderDays(true)}
+            className="mt-8 w-full rounded-2xl border border-line bg-paper-elev py-3 text-sm text-ink-2 hover:bg-highlight"
+            style={{
+              ['--tw-bg-opacity' as never]: 1,
+            }}
+          >
+            Show {grouped.length - 7} older{' '}
+            {grouped.length - 7 === 1 ? 'day' : 'days'}
+          </button>
+        )}
+
+        {showOlderDays &&
+          grouped.slice(7).map((group) => (
+            <DaySection
+              key={group.label}
+              group={group}
+              expanded={expandedDays.has(group.label)}
+              collapsible
+              onToggle={() => toggleDay(group.label)}
+              expandedId={expandedId}
+              setExpandedId={setExpandedId}
+              onDelete={handleDelete}
+            />
+          ))}
       </div>
 
       {questionModalOpen && (

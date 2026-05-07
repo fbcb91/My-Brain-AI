@@ -1,4 +1,4 @@
-import { listUnsynced, listCaptures, markSynced, saveCapture } from './db';
+import { listUnsynced, listCaptures, markSynced, saveCapture, deleteCapture as deleteCaptureLocal } from './db';
 import { supabase } from './supabase';
 import type { Capture } from './types';
 
@@ -118,8 +118,14 @@ function rowToCapture(row: ServerRow): Capture {
  * that aren't yet in the local IndexedDB. Audio blobs are not downloaded
  * here — they're fetched on demand from `getOrFetchAudioBlob` when the
  * user actually plays a clip.
+ *
+ * Also removes locally-cached captures that have been deleted on another
+ * device: if a capture is locally-marked-as-synced but no longer present
+ * on the server, we drop it from the local cache so deletions propagate.
+ * Captures that are still pending upload (`syncedAt` undefined) are
+ * never touched here.
  */
-export async function pullFromServer(): Promise<{ added: number }> {
+export async function pullFromServer(): Promise<{ added: number; removed: number }> {
   const { data, error } = await supabase
     .from('captures')
     .select('*')
@@ -129,6 +135,7 @@ export async function pullFromServer(): Promise<{ added: number }> {
 
   const local = await listCaptures();
   const localIds = new Set(local.map((c) => c.id));
+  const serverIds = new Set(rows.map((r) => r.id));
 
   let added = 0;
   for (const row of rows) {
@@ -136,7 +143,47 @@ export async function pullFromServer(): Promise<{ added: number }> {
     await saveCapture(rowToCapture(row));
     added++;
   }
-  return { added };
+
+  let removed = 0;
+  for (const cap of local) {
+    if (cap.syncedAt && !serverIds.has(cap.id)) {
+      await deleteCaptureLocal(cap.id);
+      removed++;
+    }
+  }
+
+  return { added, removed };
+}
+
+/**
+ * Removes a capture from every place it lives: Storage (audio file, if any),
+ * Postgres (the metadata row, RLS-scoped to the current user), and the
+ * local IndexedDB. Optimistic-friendly: callers usually update local state
+ * first; this function then ensures everything else catches up.
+ *
+ * If the row was never synced we skip the server steps entirely — there's
+ * nothing remote to clean up.
+ */
+export async function deleteCaptureFully(capture: Capture): Promise<void> {
+  if (capture.syncedAt) {
+    const { error: rowError } = await supabase
+      .from('captures')
+      .delete()
+      .eq('id', capture.id);
+    if (rowError) throw rowError;
+
+    if (capture.audioPath) {
+      const { error: storageError } = await supabase.storage
+        .from(BUCKET)
+        .remove([capture.audioPath]);
+      if (storageError) {
+        // Row is already gone — orphaned blob is annoying but not catastrophic.
+        console.error('[delete] storage cleanup failed', storageError);
+      }
+    }
+  }
+
+  await deleteCaptureLocal(capture.id);
 }
 
 /**
