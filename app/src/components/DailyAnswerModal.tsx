@@ -51,7 +51,9 @@ export default function DailyAnswerModal({
 
   async function handleVoiceStop() {
     const result = await recorder.stop();
-    if (!result || result.duration < 0.6) return;
+    // Match Today.tsx — anything shorter than a second is almost certainly
+    // an accidental press, not a real answer.
+    if (!result || result.duration < 1.0) return;
     await commit({
       id: newId(),
       userId,

@@ -14,6 +14,7 @@ import {
 } from '../lib/questions';
 import { syncAll, pullFromServer, getOrFetchAudioBlob } from '../lib/sync';
 import { transcribePending } from '../lib/transcribe';
+import { isLikelyHallucination } from '../lib/transcript-quality';
 import type { Capture } from '../lib/types';
 
 const fmt = (s: number) => {
@@ -66,7 +67,9 @@ function newId(): string {
 function getLabel(c: Capture): string {
   if (c.kind === 'note') return c.text ?? '';
   const t = c.transcript;
-  if (typeof t === 'string' && t.trim()) return t;
+  if (typeof t === 'string' && t.trim() && !isLikelyHallucination(t)) {
+    return t;
+  }
   if (c.syncedAt && t === undefined) return 'Transcribing…';
   return `voice · ${fmt(c.duration ?? 0)}`;
 }
@@ -243,7 +246,9 @@ export default function Today() {
 
   const handleStop = useCallback(async () => {
     const result = await recorder.stop();
-    if (!result || result.duration < 0.6) return;
+    // Drop accidental sub-second presses — they almost never carry signal
+    // and Whisper turns them into hallucinations like "Thank you."
+    if (!result || result.duration < 1.0) return;
     const capture: Capture = {
       id: newId(),
       userId: user?.id,

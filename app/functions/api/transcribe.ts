@@ -20,6 +20,52 @@ type PagesFunction<E> = (context: {
 
 const WHISPER_MODEL = '@cf/openai/whisper';
 
+const KNOWN_HALLUCINATIONS = new Set<string>([
+  'you',
+  'you?',
+  'you.',
+  'thank you',
+  'thank you.',
+  'thanks',
+  'thanks.',
+  'thanks!',
+  'thanks for watching',
+  'thanks for watching.',
+  'thanks for watching!',
+  'bye',
+  'bye.',
+  'bye!',
+  'goodbye',
+  'goodbye.',
+  'okay',
+  'ok',
+  'k.',
+  'yes',
+  'yes.',
+  'no',
+  'no.',
+  '...',
+  '. . .',
+  'mm',
+  'mm.',
+  'mhm',
+  'uh',
+  'um',
+]);
+
+function isLikelyHallucination(transcript: string): boolean {
+  const trimmed = transcript.trim();
+  if (!trimmed) return false;
+  if (trimmed.length < 4) return true;
+  const lower = trimmed.toLowerCase();
+  if (KNOWN_HALLUCINATIONS.has(lower)) return true;
+  if (/^\[.+\]$/.test(trimmed)) return true;
+  if (/^\(.+\)$/.test(trimmed)) return true;
+  if (/^[♪\s]+$/.test(trimmed)) return true;
+  if (/^[　-鿿\s]+$/.test(trimmed)) return true;
+  return false;
+}
+
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) return json({ error: 'Missing auth header' }, 401);
@@ -100,6 +146,17 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       },
       500
     );
+  }
+
+  // Drop common Whisper hallucinations on silent / near-silent audio.
+  // We still mark the row as "transcribed" (empty string, not null) so we
+  // don't retry forever.
+  if (isLikelyHallucination(transcript)) {
+    console.log(
+      '[transcribe] dropping likely hallucination',
+      JSON.stringify(transcript)
+    );
+    transcript = '';
   }
 
   const { error: updateError } = await supabase
