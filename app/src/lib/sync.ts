@@ -53,6 +53,7 @@ export async function uploadCapture(
       audio_path: audioPath ?? null,
       text: capture.text ?? null,
       transcript: capture.transcript ?? null,
+      question_text: capture.questionText ?? null,
     },
     { onConflict: 'id' }
   );
@@ -92,6 +93,7 @@ interface ServerRow {
   audio_path: string | null;
   text: string | null;
   transcript: string | null;
+  question_text: string | null;
 }
 
 function rowToCapture(row: ServerRow): Capture {
@@ -105,6 +107,7 @@ function rowToCapture(row: ServerRow): Capture {
     audioPath: row.audio_path ?? undefined,
     text: row.text ?? undefined,
     transcript: row.transcript ?? undefined,
+    questionText: row.question_text ?? undefined,
     syncedAt: Date.now(),
     // audioBlob intentionally omitted — fetched lazily when the user expands a row
   };

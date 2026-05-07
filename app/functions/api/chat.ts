@@ -35,6 +35,7 @@ interface ServerCapture {
   kind: 'voice' | 'note';
   transcript: string | null;
   text: string | null;
+  question_text: string | null;
 }
 
 interface ChatMessageInput {
@@ -55,7 +56,12 @@ function captureToContext(c: ServerCapture): string | null {
   const stamp = `${date.toISOString().slice(0, 10)} ${date
     .toISOString()
     .slice(11, 16)}`;
-  return `[${c.id}] ${stamp} (${c.kind})\n${trimmed}`;
+  // Captures that answer a daily question are tagged so Claude knows
+  // they were prompted, not spontaneous, and what was asked.
+  const header = c.question_text
+    ? `[${c.id}] ${stamp} (${c.kind}, in answer to "${c.question_text}")`
+    : `[${c.id}] ${stamp} (${c.kind})`;
+  return `${header}\n${trimmed}`;
 }
 
 interface ParsedReply {
@@ -124,7 +130,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   const { data: capRows, error: fetchError } = await supabase
     .from('captures')
-    .select('id, created_at, kind, transcript, text')
+    .select('id, created_at, kind, transcript, text, question_text')
     .order('created_at', { ascending: false });
 
   if (fetchError) {

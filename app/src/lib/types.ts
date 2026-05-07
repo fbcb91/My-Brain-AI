@@ -16,6 +16,9 @@ export interface Capture {
   text?: string;
   /** transcription, filled in once Whisper integration lands (Phase 2.3) */
   transcript?: string;
+  /** Set when this capture is the answer to a Daily Question — stores the
+   * question text verbatim, so Claude can use it as context later. */
+  questionText?: string;
   /** ms timestamp of last successful sync to Supabase. Null/undefined → pending. */
   syncedAt?: number;
 }

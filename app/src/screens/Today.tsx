@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import DailyAnswerModal from '../components/DailyAnswerModal';
+import DailyQuestionCard from '../components/DailyQuestionCard';
 import Waveform from '../components/Waveform';
 import { useAuth } from '../contexts/AuthContext';
 import { useRecorder } from '../hooks/useRecorder';
 import { listCaptures, saveCapture } from '../lib/db';
+import {
+  hasAnsweredToday,
+  isQuestionSkippedToday,
+  markQuestionSkippedToday,
+  todaysQuestion,
+} from '../lib/questions';
 import { syncAll, pullFromServer, getOrFetchAudioBlob } from '../lib/sync';
 import { transcribePending } from '../lib/transcribe';
 import type { Capture } from '../lib/types';
@@ -181,8 +189,13 @@ export default function Today() {
   const [textMode, setTextMode] = useState(false);
   const [textValue, setTextValue] = useState('');
   const [savingText, setSavingText] = useState(false);
+  const [questionModalOpen, setQuestionModalOpen] = useState(false);
+  const [questionSkipped, setQuestionSkipped] = useState(() =>
+    isQuestionSkippedToday()
+  );
 
   const recorder = useRecorder();
+  const question = useMemo(() => todaysQuestion(), []);
 
   const loadAll = useCallback(async () => {
     const all = await listCaptures();
@@ -249,6 +262,17 @@ export default function Today() {
     setTextValue('');
   }, []);
 
+  const handleSkipQuestion = useCallback(() => {
+    markQuestionSkippedToday();
+    setQuestionSkipped(true);
+  }, []);
+
+  const handleQuestionAnswered = useCallback(async () => {
+    setQuestionModalOpen(false);
+    await loadAll();
+    void sync();
+  }, [loadAll, sync]);
+
   const saveText = useCallback(async () => {
     const text = textValue.trim();
     if (!text || savingText) return;
@@ -267,6 +291,12 @@ export default function Today() {
     await loadAll();
     void sync();
   }, [textValue, savingText, user, loadAll, sync]);
+
+  const showDailyQuestion = useMemo(() => {
+    if (questionSkipped) return false;
+    if (hasAnsweredToday(captures, question)) return false;
+    return true;
+  }, [captures, question, questionSkipped]);
 
   const grouped = useMemo(() => {
     const groups: { label: string; items: Capture[] }[] = [];
@@ -406,6 +436,14 @@ export default function Today() {
           <p className="mt-3 text-center text-xs text-[#b94d2b]">{recorder.error}</p>
         )}
 
+        {showDailyQuestion && !textMode && !recorder.isRecording && (
+          <DailyQuestionCard
+            question={question}
+            onAnswer={() => setQuestionModalOpen(true)}
+            onSkip={handleSkipQuestion}
+          />
+        )}
+
         {loaded && captures.length === 0 && !recorder.isRecording && !textMode && (
           <div className="mt-10 text-center">
             <p className="display text-lg text-ink-2">Nothing here yet.</p>
@@ -436,6 +474,15 @@ export default function Today() {
           </section>
         ))}
       </div>
+
+      {questionModalOpen && (
+        <DailyAnswerModal
+          question={question}
+          userId={user?.id}
+          onAnswered={handleQuestionAnswered}
+          onClose={() => setQuestionModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
