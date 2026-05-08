@@ -144,10 +144,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     .join('\n\n');
 
   if (!memoriesText) {
-    return json({
-      text:
-        "I don't have any memories from you yet. Record a thought or two and come back.",
-      sources: [],
+    return ndjsonStream((emit, close) => {
+      emit({
+        type: 'text',
+        text:
+          "I don't have any memories from you yet. Record a thought or two and come back.",
+      });
+      emit({ type: 'done', sources: [] });
+      close();
     });
   }
 
@@ -157,6 +161,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const requestPayload = {
     model: MODEL,
     max_tokens: MAX_OUTPUT_TOKENS,
+    stream: true,
     system: [
       { type: 'text', text: baseSystem },
       {
@@ -185,7 +190,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'Anthropic request failed', detail: message }, 502);
   }
 
-  if (!anthropicRes.ok) {
+  if (!anthropicRes.ok || !anthropicRes.body) {
     const detail = await anthropicRes.text().catch(() => '');
     console.error('[chat] Anthropic error', anthropicRes.status, detail);
     return json(
@@ -194,18 +199,109 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     );
   }
 
-  interface AnthropicResponse {
-    content?: { type?: string; text?: string }[];
-  }
-  const data = (await anthropicRes.json()) as AnthropicResponse;
-  const rawText = (data.content?.[0]?.text ?? '').trim();
-  if (!rawText) {
-    return json({ text: "I don't know what to say right now.", sources: [] });
-  }
-
-  const { text, sources } = parseReply(rawText);
-  return json({ text, sources });
+  return relayAnthropicStream(anthropicRes.body);
 };
+
+/**
+ * Helper that builds a Response with an NDJSON body. The producer function is
+ * invoked once with `emit` (to push an event) and `close` (to finalise the
+ * stream).
+ */
+function ndjsonStream(
+  produce: (
+    emit: (obj: unknown) => void,
+    close: () => void
+  ) => void | Promise<void>
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const emit = (obj: unknown) => {
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'));
+      };
+      const close = () => {
+        controller.close();
+      };
+      try {
+        await produce(emit, close);
+      } catch (e) {
+        const error = e instanceof Error ? e.message : String(e);
+        emit({ type: 'error', error });
+        close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      'content-type': 'application/x-ndjson',
+      'cache-control': 'no-cache',
+      'x-content-type-options': 'nosniff',
+    },
+  });
+}
+
+/**
+ * Reads Anthropic's SSE stream, re-emits each text chunk to the client as
+ * NDJSON, and at the end emits a `done` event with the parsed sources from
+ * the full accumulated text.
+ */
+function relayAnthropicStream(upstreamBody: ReadableStream<Uint8Array>): Response {
+  return ndjsonStream(async (emit, close) => {
+    const reader = upstreamBody.getReader();
+    const decoder = new TextDecoder();
+    let upstreamBuffer = '';
+    let fullText = '';
+
+    interface AnthropicEvent {
+      type?: string;
+      delta?: { type?: string; text?: string };
+      error?: { message?: string };
+    }
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      upstreamBuffer += decoder.decode(value, { stream: true });
+
+      // Anthropic sends SSE events separated by a blank line
+      const events = upstreamBuffer.split('\n\n');
+      upstreamBuffer = events.pop() ?? '';
+
+      for (const ev of events) {
+        const dataLine = ev
+          .split('\n')
+          .find((l) => l.startsWith('data: '));
+        if (!dataLine) continue;
+        let parsed: AnthropicEvent;
+        try {
+          parsed = JSON.parse(dataLine.slice('data: '.length)) as AnthropicEvent;
+        } catch {
+          continue;
+        }
+        if (
+          parsed.type === 'content_block_delta' &&
+          parsed.delta?.type === 'text_delta' &&
+          typeof parsed.delta.text === 'string'
+        ) {
+          const chunk = parsed.delta.text;
+          fullText += chunk;
+          emit({ type: 'text', text: chunk });
+        } else if (parsed.type === 'error') {
+          emit({
+            type: 'error',
+            error: parsed.error?.message ?? 'Anthropic error',
+          });
+          close();
+          return;
+        }
+      }
+    }
+
+    const { sources } = parseReply(fullText);
+    emit({ type: 'done', sources });
+    close();
+  });
+}
 
 function json(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {

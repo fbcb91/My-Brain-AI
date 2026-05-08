@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { sendChatMessage, type ChatMessage } from '../lib/chat';
+import { stripChatMarkers, streamChatMessage, type ChatMessage } from '../lib/chat';
 import { listCaptures } from '../lib/db';
 import type { Capture } from '../lib/types';
 
@@ -125,21 +125,55 @@ export default function Memory() {
       content: m.text,
     }));
 
-    try {
-      const response = await sendChatMessage(apiMessages);
-      setConvo((c) => [
-        ...c,
-        {
-          role: 'assistant',
-          text: response.text,
-          sources: resolveSources(response.sources),
-        },
-      ]);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong.');
-    } finally {
-      setThinking(false);
-    }
+    let firstChunk = true;
+    let raw = '';
+
+    await streamChatMessage(apiMessages, {
+      onText: (chunk) => {
+        raw += chunk;
+        const display = stripChatMarkers(raw);
+        if (firstChunk) {
+          firstChunk = false;
+          setThinking(false);
+          setConvo((c) => [
+            ...c,
+            { role: 'assistant', text: display, sources: [] },
+          ]);
+        } else {
+          setConvo((c) => {
+            const next = [...c];
+            const last = next[next.length - 1];
+            if (last && last.role === 'assistant') {
+              next[next.length - 1] = { ...last, text: display };
+            }
+            return next;
+          });
+        }
+      },
+      onDone: (sourceIds) => {
+        const sources = resolveSources(sourceIds);
+        setConvo((c) => {
+          const next = [...c];
+          const last = next[next.length - 1];
+          if (last && last.role === 'assistant') {
+            next[next.length - 1] = {
+              ...last,
+              text: stripChatMarkers(raw),
+              sources,
+            };
+          }
+          return next;
+        });
+        setThinking(false);
+      },
+      onError: (err) => {
+        setError(err);
+        setThinking(false);
+        if (!firstChunk) {
+          // We had partial text — leave it but flag the error above.
+        }
+      },
+    });
   }
 
   return (
