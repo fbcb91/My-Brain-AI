@@ -324,6 +324,7 @@ export default function Today() {
   );
   const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set());
   const [showOlderDays, setShowOlderDays] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const toggleDay = useCallback((label: string) => {
     setExpandedDays((prev) => {
@@ -344,11 +345,28 @@ export default function Today() {
 
   const sync = useCallback(async () => {
     if (!user) return;
-    const result = await syncAll(user.id);
-    if (result.ok > 0) await loadAll();
-    // Once captures are uploaded we can ask Workers AI to transcribe them.
-    const tResult = await transcribePending();
-    if (tResult.ok > 0) await loadAll();
+    let failures = 0;
+    try {
+      const result = await syncAll(user.id);
+      failures += result.failed;
+      if (result.ok > 0) await loadAll();
+      // Once captures are uploaded we can ask Workers AI to transcribe them.
+      const tResult = await transcribePending();
+      failures += tResult.failed;
+      if (tResult.ok > 0) await loadAll();
+    } catch (e) {
+      console.error('[sync] unexpected error', e);
+      failures += 1;
+    }
+    if (failures > 0) {
+      setSyncError(
+        failures === 1
+          ? '1 capture couldn\'t reach the cloud.'
+          : `${failures} captures couldn't reach the cloud.`
+      );
+    } else {
+      setSyncError(null);
+    }
   }, [user, loadAll]);
 
   useEffect(() => {
@@ -478,6 +496,27 @@ export default function Today() {
           <h1 className="display mt-1.5 text-[34px] leading-[1.05]">Today</h1>
         </header>
 
+        {syncError && (
+          <button
+            type="button"
+            onClick={() => {
+              setSyncError(null);
+              void sync();
+            }}
+            className="mt-4 flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-[13px]"
+            style={{
+              background: 'rgba(185, 77, 43, 0.08)',
+              borderColor: 'rgba(185, 77, 43, 0.30)',
+              color: '#7a3320',
+            }}
+          >
+            <span>{syncError}</span>
+            <span className="font-medium underline-offset-2 hover:underline">
+              Retry
+            </span>
+          </button>
+        )}
+
         {textMode ? (
           <div
             className="mt-6 flex w-full flex-col rounded-3xl border bg-paper-elev px-5 py-5 transition-all"
@@ -568,7 +607,7 @@ export default function Today() {
               </span>
               {recorder.isRecording ? (
                 <>
-                  <Waveform />
+                  <Waveform stream={recorder.stream} />
                   <span className="mono text-[13px] tracking-[0.05em] text-accent">
                     ● Recording {fmt(recorder.duration)}
                   </span>
@@ -600,6 +639,30 @@ export default function Today() {
             onAnswer={() => setQuestionModalOpen(true)}
             onSkip={handleSkipQuestion}
           />
+        )}
+
+        {!loaded && (
+          <div className="mt-7">
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="eyebrow opacity-60">Today</span>
+            </div>
+            <div className="flex flex-col border-t border-line">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="grid animate-pulse items-center gap-2.5 border-b border-line py-3.5"
+                  style={{ gridTemplateColumns: '46px 22px 1fr' }}
+                >
+                  <span className="h-3 w-10 rounded bg-paper-deep" />
+                  <span className="h-[22px] w-[22px] rounded-full bg-paper-deep" />
+                  <span
+                    className="h-3 rounded bg-paper-deep"
+                    style={{ width: `${65 + i * 7}%` }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {loaded && captures.length === 0 && !recorder.isRecording && !textMode && (

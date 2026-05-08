@@ -16,6 +16,9 @@ interface UseRecorderApi extends UseRecorderState {
   start: () => Promise<void>;
   stop: () => Promise<RecordingResult | null>;
   cancel: () => void;
+  /** The active MediaStream while recording, otherwise null. Useful for
+   *  building a visualiser. */
+  stream: MediaStream | null;
 }
 
 /** Pick a mimeType the current browser actually supports. */
@@ -40,6 +43,7 @@ export function useRecorder(): UseRecorderApi {
     duration: 0,
     error: null,
   });
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -57,6 +61,7 @@ export function useRecorder(): UseRecorderApi {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    setStream(null);
     recorderRef.current = null;
     chunksRef.current = [];
   }, []);
@@ -77,9 +82,9 @@ export function useRecorder(): UseRecorderApi {
       return;
     }
 
-    let stream: MediaStream;
+    let mediaStream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       const msg =
         e instanceof Error && e.name === 'NotAllowedError'
@@ -89,14 +94,16 @@ export function useRecorder(): UseRecorderApi {
       return;
     }
 
-    streamRef.current = stream;
+    streamRef.current = mediaStream;
+    setStream(mediaStream);
     const mimeType = pickMimeType();
     let recorder: MediaRecorder;
     try {
-      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorder = mimeType
+        ? new MediaRecorder(mediaStream, { mimeType })
+        : new MediaRecorder(mediaStream);
     } catch {
-      // fallback without options
-      recorder = new MediaRecorder(stream);
+      recorder = new MediaRecorder(mediaStream);
     }
     recorderRef.current = recorder;
     chunksRef.current = [];
@@ -156,5 +163,5 @@ export function useRecorder(): UseRecorderApi {
     }
   }, [cleanup]);
 
-  return { ...state, start, stop, cancel };
+  return { ...state, start, stop, cancel, stream };
 }

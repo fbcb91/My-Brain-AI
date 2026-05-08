@@ -212,7 +212,7 @@ export default function DailyAnswerModal({
                 </span>
                 {recorder.isRecording ? (
                   <>
-                    <Waveform />
+                    <Waveform stream={recorder.stream} />
                     <span className="mono text-[13px] tracking-[0.05em] text-accent">
                       ● Recording {fmt(recorder.duration)}
                     </span>

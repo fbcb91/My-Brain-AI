@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Markdown from '../components/Markdown';
 import { useAuth } from '../contexts/AuthContext';
 import { stripChatMarkers, streamChatMessage, type ChatMessage } from '../lib/chat';
 import { listCaptures } from '../lib/db';
@@ -231,9 +232,10 @@ export default function Memory() {
                 <p className="mono text-[10px] tracking-[0.14em] text-accent">
                   Niklaus
                 </p>
-                <p className="display mb-2.5 mt-1.5 whitespace-pre-wrap text-[15px] leading-relaxed">
-                  {m.text}
-                </p>
+                <Markdown
+                  text={m.text}
+                  className="display mb-2.5 mt-1.5 text-[15px] leading-relaxed"
+                />
                 {m.sources && m.sources.length > 0 && (
                   <div className="flex flex-col gap-1.5">
                     {m.sources.map((s) => (
