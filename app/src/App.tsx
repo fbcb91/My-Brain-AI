@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import TabBar from './components/TabBar';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import CaptureDetail from './screens/CaptureDetail';
 import Memory from './screens/Memory';
 import SignIn from './screens/SignIn';
 import Today from './screens/Today';
@@ -54,6 +55,14 @@ function AppRoutes() {
           element={
             <Protected>
               <You />
+            </Protected>
+          }
+        />
+        <Route
+          path="/capture/:id"
+          element={
+            <Protected>
+              <CaptureDetail />
             </Protected>
           }
         />

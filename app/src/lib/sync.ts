@@ -54,6 +54,7 @@ export async function uploadCapture(
       text: capture.text ?? null,
       transcript: capture.transcript ?? null,
       question_text: capture.questionText ?? null,
+      is_private: capture.isPrivate ?? false,
     },
     { onConflict: 'id' }
   );
@@ -94,6 +95,7 @@ interface ServerRow {
   text: string | null;
   transcript: string | null;
   question_text: string | null;
+  is_private: boolean | null;
 }
 
 function rowToCapture(row: ServerRow): Capture {
@@ -108,8 +110,10 @@ function rowToCapture(row: ServerRow): Capture {
     text: row.text ?? undefined,
     transcript: row.transcript ?? undefined,
     questionText: row.question_text ?? undefined,
+    isPrivate: row.is_private ?? false,
     syncedAt: Date.now(),
-    // audioBlob intentionally omitted — fetched lazily when the user expands a row
+    // audioBlob intentionally omitted — fetched lazily when the user opens
+    // the capture detail view.
   };
 }
 

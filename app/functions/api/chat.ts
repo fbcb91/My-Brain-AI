@@ -128,9 +128,13 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }
   );
 
+  // Private captures are explicitly hidden from the chat memory context —
+  // the user marks them so they don't surface in answers and so they
+  // don't reach future heir access.
   const { data: capRows, error: fetchError } = await supabase
     .from('captures')
     .select('id, created_at, kind, transcript, text, question_text')
+    .eq('is_private', false)
     .order('created_at', { ascending: false });
 
   if (fetchError) {

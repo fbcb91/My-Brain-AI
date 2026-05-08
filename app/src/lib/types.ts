@@ -19,6 +19,9 @@ export interface Capture {
   /** Set when this capture is the answer to a Daily Question — stores the
    * question text verbatim, so Claude can use it as context later. */
   questionText?: string;
+  /** Marked private by the user. Excluded from chat memory context and
+   * (in the future) from heir access. Defaults to false. */
+  isPrivate?: boolean;
   /** ms timestamp of last successful sync to Supabase. Null/undefined → pending. */
   syncedAt?: number;
 }

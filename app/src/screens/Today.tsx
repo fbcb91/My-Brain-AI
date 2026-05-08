@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import DailyAnswerModal from '../components/DailyAnswerModal';
 import DailyQuestionCard from '../components/DailyQuestionCard';
 import Waveform from '../components/Waveform';
@@ -12,12 +13,7 @@ import {
   markQuestionSkippedToday,
   todaysQuestion,
 } from '../lib/questions';
-import {
-  syncAll,
-  pullFromServer,
-  getOrFetchAudioBlob,
-  deleteCaptureFully,
-} from '../lib/sync';
+import { syncAll, pullFromServer } from '../lib/sync';
 import { transcribePending } from '../lib/transcribe';
 import { isLikelyHallucination } from '../lib/transcript-quality';
 import type { Capture } from '../lib/types';
@@ -90,9 +86,7 @@ interface DaySectionProps {
   expanded: boolean;
   collapsible: boolean;
   onToggle: () => void;
-  expandedId: string | null;
-  setExpandedId: (updater: (cur: string | null) => string | null) => void;
-  onDelete: (capture: Capture) => Promise<void> | void;
+  onOpen: (capture: Capture) => void;
 }
 
 function DaySection({
@@ -100,9 +94,7 @@ function DaySection({
   expanded,
   collapsible,
   onToggle,
-  expandedId,
-  setExpandedId,
-  onDelete,
+  onOpen,
 }: DaySectionProps) {
   const countLabel = `${group.items.length} ${
     group.items.length === 1 ? 'capture' : 'captures'
@@ -136,15 +128,7 @@ function DaySection({
       {expanded && (
         <ul className="flex flex-col border-t border-line">
           {group.items.map((c) => (
-            <AudioRow
-              key={c.id}
-              capture={c}
-              expanded={expandedId === c.id}
-              onToggle={() =>
-                setExpandedId((cur) => (cur === c.id ? null : c.id))
-              }
-              onDelete={onDelete}
-            />
+            <CaptureRow key={c.id} capture={c} onOpen={onOpen} />
           ))}
         </ul>
       )}
@@ -152,68 +136,12 @@ function DaySection({
   );
 }
 
-interface AudioRowProps {
+interface CaptureRowProps {
   capture: Capture;
-  expanded: boolean;
-  onToggle: () => void;
-  onDelete: (capture: Capture) => Promise<void> | void;
+  onOpen: (capture: Capture) => void;
 }
 
-function AudioRow({ capture, expanded, onToggle, onDelete }: AudioRowProps) {
-  const [blob, setBlob] = useState<Blob | null>(capture.audioBlob ?? null);
-  const [fetching, setFetching] = useState(false);
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  // Reset the confirm state when the row collapses, so reopening starts fresh.
-  useEffect(() => {
-    if (!expanded) setConfirming(false);
-  }, [expanded]);
-
-  // Sync local state when the capture prop's blob arrives (e.g. after a refresh)
-  useEffect(() => {
-    if (capture.audioBlob) setBlob(capture.audioBlob);
-  }, [capture.audioBlob]);
-
-  // Lazy-download the audio the first time the user expands a row that doesn't
-  // have it cached locally. We deliberately don't include `fetching` or the
-  // full `capture` object in the deps: state updates inside this effect would
-  // otherwise cancel the in-flight download via the cleanup before it can
-  // finish.
-  useEffect(() => {
-    if (!expanded || blob || !capture.audioPath) return;
-    let cancelled = false;
-    setFetching(true);
-    setFetchError(null);
-    getOrFetchAudioBlob(capture)
-      .then((b) => {
-        if (cancelled) return;
-        setFetching(false);
-        if (!b) {
-          setFetchError('Audio unavailable.');
-          return;
-        }
-        setBlob(b);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setFetching(false);
-        setFetchError('Audio unavailable.');
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, blob, capture.id, capture.audioPath]);
-
-  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
-  useEffect(() => {
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [url]);
-
+function CaptureRow({ capture, onOpen }: CaptureRowProps) {
   const label = getLabel(capture);
   const transcribing = isTranscribing(capture);
   const pending = !capture.syncedAt;
@@ -222,11 +150,13 @@ function AudioRow({ capture, expanded, onToggle, onDelete }: AudioRowProps) {
     <li className="border-b border-line">
       <button
         type="button"
-        onClick={onToggle}
+        onClick={() => onOpen(capture)}
         className="grid w-full items-center gap-2.5 py-3.5 text-left"
         style={{ gridTemplateColumns: '46px auto 1fr auto' }}
       >
-        <span className="mono text-[11px] text-ink-3">{timeLabel(capture.createdAt)}</span>
+        <span className="mono text-[11px] text-ink-3">
+          {timeLabel(capture.createdAt)}
+        </span>
         <span
           className="flex h-[22px] w-[22px] items-center justify-center rounded-full text-[10px] text-accent"
           style={{
@@ -238,9 +168,17 @@ function AudioRow({ capture, expanded, onToggle, onDelete }: AudioRowProps) {
           {capture.kind === 'voice' ? '◉' : '✎'}
         </span>
         <span
-          className={`truncate text-[13.5px] ${transcribing ? 'italic text-ink-3' : 'text-ink-2'}`}
+          className={`flex items-center gap-1.5 truncate text-[13.5px] ${transcribing ? 'italic text-ink-3' : 'text-ink-2'}`}
         >
-          {label}
+          {capture.isPrivate && (
+            <span aria-label="Private" title="Private" className="text-ink-3">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="4" y="11" width="16" height="10" rx="2" />
+                <path d="M8 11V7a4 4 0 018 0v4" />
+              </svg>
+            </span>
+          )}
+          <span className="truncate">{label}</span>
         </span>
         {pending && (
           <span
@@ -250,71 +188,15 @@ function AudioRow({ capture, expanded, onToggle, onDelete }: AudioRowProps) {
           />
         )}
       </button>
-      {expanded && (
-        <div className="space-y-3 pb-3 pl-[58px] pr-1">
-          {capture.kind === 'voice' && (
-            <>
-              {url && (
-                <audio src={url} controls preload="metadata" className="w-full" />
-              )}
-              {!url && fetching && (
-                <p className="text-xs text-ink-3">Loading audio…</p>
-              )}
-              {!url && !fetching && fetchError && (
-                <p className="text-xs text-[#b94d2b]">{fetchError}</p>
-              )}
-            </>
-          )}
-          {!confirming ? (
-            <button
-              type="button"
-              onClick={() => setConfirming(true)}
-              disabled={deleting}
-              className="text-xs text-ink-3 underline-offset-2 hover:text-[#b94d2b] hover:underline disabled:opacity-50"
-            >
-              Delete
-            </button>
-          ) : (
-            <div className="flex items-center gap-3 text-xs">
-              <span className="text-ink-2">Delete this capture?</span>
-              <button
-                type="button"
-                onClick={async () => {
-                  setDeleting(true);
-                  try {
-                    await onDelete(capture);
-                  } catch (e) {
-                    console.error('[delete] failed', e);
-                    setDeleting(false);
-                    setConfirming(false);
-                  }
-                }}
-                disabled={deleting}
-                className="font-medium text-[#b94d2b] hover:underline disabled:opacity-50"
-              >
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirming(false)}
-                disabled={deleting}
-                className="text-ink-3 hover:text-ink-2 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </li>
   );
 }
 
 export default function Today() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [captures, setCaptures] = useState<Capture[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [textMode, setTextMode] = useState(false);
   const [textValue, setTextValue] = useState('');
   const [savingText, setSavingText] = useState(false);
@@ -398,19 +280,11 @@ export default function Today() {
     void recorder.start();
   }, [recorder]);
 
-  const handleDelete = useCallback(
-    async (cap: Capture) => {
-      // Optimistic removal so the UI feels instant.
-      setCaptures((cs) => cs.filter((c) => c.id !== cap.id));
-      setExpandedId((cur) => (cur === cap.id ? null : cur));
-      try {
-        await deleteCaptureFully(cap);
-      } catch (e) {
-        console.error('[delete] failed, restoring local row', e);
-        await loadAll();
-      }
+  const handleOpenCapture = useCallback(
+    (cap: Capture) => {
+      navigate(`/capture/${cap.id}`);
     },
-    [loadAll]
+    [navigate]
   );
 
   const handleStop = useCallback(async () => {
@@ -681,9 +555,7 @@ export default function Today() {
             expanded={idx === 0 || expandedDays.has(group.label)}
             collapsible={idx > 0}
             onToggle={() => toggleDay(group.label)}
-            expandedId={expandedId}
-            setExpandedId={setExpandedId}
-            onDelete={handleDelete}
+            onOpen={handleOpenCapture}
           />
         ))}
 
@@ -709,9 +581,7 @@ export default function Today() {
               expanded={expandedDays.has(group.label)}
               collapsible
               onToggle={() => toggleDay(group.label)}
-              expandedId={expandedId}
-              setExpandedId={setExpandedId}
-              onDelete={handleDelete}
+              onOpen={handleOpenCapture}
             />
           ))}
       </div>
