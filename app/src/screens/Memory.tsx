@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Markdown from '../components/Markdown';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  clearChatMessages,
+  archiveCurrentConversation,
   loadChatMessages,
   saveChatMessage,
   stripChatMarkers,
@@ -177,16 +177,18 @@ export default function Memory() {
     return out;
   }
 
-  async function clearConvo() {
+  async function startNewChat() {
     setError(null);
     setInput('');
     const previous = convo;
     setConvo([]);
     try {
-      await clearChatMessages();
+      // Past messages aren't deleted — they're archived and remain part of
+      // Niklaus's memory of you. Only the visible thread resets.
+      await archiveCurrentConversation();
     } catch (e) {
-      console.error('[memory] clear failed', e);
-      setError('Could not clear chat. Try again?');
+      console.error('[memory] archive failed', e);
+      setError('Could not start a new chat. Try again?');
       setConvo(previous);
     }
   }
@@ -290,8 +292,9 @@ export default function Memory() {
         {convo.length > 0 && (
           <button
             type="button"
-            onClick={() => void clearConvo()}
+            onClick={() => void startNewChat()}
             className="mt-2 shrink-0 text-xs text-ink-3 underline-offset-2 hover:text-ink hover:underline"
+            title="Niklaus still remembers past conversations"
           >
             New chat
           </button>

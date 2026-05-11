@@ -147,7 +147,37 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     .filter((s): s is string => s !== null)
     .join('\n\n');
 
-  if (!memoriesText) {
+  // Past chats (any message that already belongs to a finished thread) are
+  // additional memory: they're the user's own questions and the model's own
+  // previous answers, which together reveal what the user has been chewing
+  // on. We pull the most recent 40 archived messages and pass them as
+  // context alongside the captures. The CURRENT conversation is in the
+  // messages array sent by the client, so we explicitly exclude it
+  // (conversation_id IS NULL) here to avoid duplication.
+  interface PastChatRow {
+    role: 'user' | 'assistant';
+    content: string;
+    created_at: string;
+  }
+  const { data: chatRows } = await supabase
+    .from('chat_messages')
+    .select('role, content, created_at')
+    .not('conversation_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(40);
+  const pastChats = ((chatRows as PastChatRow[] | null) ?? []).reverse();
+  const pastChatsText = pastChats
+    .map((m) => {
+      const stamp = new Date(m.created_at).toISOString().slice(0, 16).replace('T', ' ');
+      const speaker = m.role === 'user' ? 'You' : 'Me';
+      const trimmed = m.content.trim();
+      if (!trimmed) return null;
+      return `[${stamp}] ${speaker}: ${trimmed}`;
+    })
+    .filter((s): s is string => s !== null)
+    .join('\n');
+
+  if (!memoriesText && !pastChatsText) {
     return ndjsonStream((emit, close) => {
       emit({
         type: 'text',
@@ -162,18 +192,40 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const today = new Date().toISOString().slice(0, 10);
   const baseSystem = NIKLAUS_VOICE.replace('{{DATE}}', today);
 
+  interface SystemBlock {
+    type: 'text';
+    text: string;
+    cache_control?: { type: 'ephemeral' };
+  }
+
+  const systemBlocks: SystemBlock[] = [{ type: 'text', text: baseSystem }];
+
+  if (memoriesText) {
+    systemBlocks.push({
+      type: 'text',
+      text: `User's memories (most recent first):\n\n${memoriesText}`,
+      cache_control: { type: 'ephemeral' },
+    });
+  }
+  if (pastChatsText) {
+    systemBlocks.push({
+      type: 'text',
+      text:
+        'Past conversations between us (chronological). These are not in ' +
+        "the user's current chat but you may draw on them — they're part " +
+        'of your memory of who they are and what they ask about. Never ' +
+        'invent past words. When in doubt say "I don\'t remember that ' +
+        'clearly."\n\n' +
+        pastChatsText,
+      cache_control: { type: 'ephemeral' },
+    });
+  }
+
   const requestPayload = {
     model: MODEL,
     max_tokens: MAX_OUTPUT_TOKENS,
     stream: true,
-    system: [
-      { type: 'text', text: baseSystem },
-      {
-        type: 'text',
-        text: `User's memories (most recent first):\n\n${memoriesText}`,
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
+    system: systemBlocks,
     messages: body.messages.map((m) => ({ role: m.role, content: m.content })),
   };
 

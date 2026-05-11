@@ -21,13 +21,17 @@ function newMessageId(): string {
 }
 
 /**
- * Loads the user's entire rolling chat thread from Supabase, oldest first.
- * RLS scopes the result to the calling user automatically.
+ * Loads the user's current rolling chat thread from Supabase, oldest first.
+ * Rows with conversation_id IS NULL are the "current" thread; older threads
+ * (which got an id assigned when the user tapped "New chat") are excluded
+ * here — they remain available to Niklaus as memory context inside
+ * /api/chat, but they don't render in the UI.
  */
 export async function loadChatMessages(): Promise<StoredChatMessage[]> {
   const { data, error } = await supabase
     .from('chat_messages')
     .select('id, role, content, sources, created_at')
+    .is('conversation_id', null)
     .order('created_at', { ascending: true });
   if (error) throw error;
   return (data ?? []).map((row) => ({
@@ -71,6 +75,31 @@ export async function clearChatMessages(): Promise<void> {
     .from('chat_messages')
     .delete()
     .eq('user_id', user.id);
+  if (error) throw error;
+}
+
+/**
+ * Closes the current chat thread without losing any messages. Every row that
+ * still has `conversation_id IS NULL` for this user is updated to a new
+ * UUID, so future loads of the current thread come back empty but the
+ * archived rows remain queryable as memory context.
+ */
+export async function archiveCurrentConversation(): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not signed in.');
+
+  const newId =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  const { error } = await supabase
+    .from('chat_messages')
+    .update({ conversation_id: newId })
+    .eq('user_id', user.id)
+    .is('conversation_id', null);
   if (error) throw error;
 }
 
