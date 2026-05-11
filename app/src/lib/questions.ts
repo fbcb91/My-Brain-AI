@@ -1,9 +1,13 @@
+import { getWhy } from './onboarding';
+import { supabase } from './supabase';
+
 /**
- * Foundation pool for the Daily Question. Used during the first weeks/months
- * of a user's life with Niklaus, when we know almost nothing about them yet
- * and want to ask broad, open questions to build up a baseline of who they
- * are. In a later phase Claude will generate questions dynamically from the
- * gaps in the user's actual memory.
+ * Foundation pool for the Daily Question. Used as a fallback when
+ * /api/daily-question can't generate a personalised question — for example
+ * offline, on the first run when the user has no memories yet, or if the
+ * Anthropic call fails. In normal operation Claude Haiku produces the
+ * question of the day based on the user's memories and their stated
+ * "why" from onboarding.
  *
  * Tone:
  * - never therapeutic, never cliché
@@ -61,15 +65,58 @@ function todayDateKey(d: Date = new Date()): string {
 }
 
 function dayIndex(d: Date = new Date()): number {
-  // Days since the unix epoch in UTC. Stable for any timezone since we
-  // only need a deterministic integer that increases by 1 each calendar day.
+  // Days since the unix epoch in UTC. Stable for any timezone since we only
+  // need a deterministic integer that increases by 1 each calendar day.
   return Math.floor(d.getTime() / 86_400_000);
 }
 
-/** Today's question, deterministic per-day across the user base. */
-export function todaysQuestion(d: Date = new Date()): string {
+/** Deterministic fallback question — used only when the API call to
+ *  /api/daily-question fails or the user is offline. */
+export function fallbackTodaysQuestion(d: Date = new Date()): string {
   const idx = dayIndex(d) % FOUNDATION_QUESTIONS.length;
   return FOUNDATION_QUESTIONS[idx];
+}
+
+/**
+ * Fetches today's question. Hits /api/daily-question which generates a
+ * personalised question via Claude Haiku and caches it for the day in
+ * Postgres. Returns the deterministic fallback question if anything goes
+ * wrong so the card never breaks.
+ */
+export async function fetchTodaysQuestion(
+  userId: string | undefined,
+  d: Date = new Date()
+): Promise<string> {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return fallbackTodaysQuestion(d);
+
+    const why = userId ? getWhy(userId) : null;
+
+    const res = await fetch('/api/daily-question', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        date: d.toISOString().slice(0, 10),
+        why: why ?? undefined,
+      }),
+    });
+    if (!res.ok) {
+      console.error('[daily-question] fetch failed', res.status);
+      return fallbackTodaysQuestion(d);
+    }
+    const data = (await res.json()) as { question?: string };
+    if (!data.question) return fallbackTodaysQuestion(d);
+    return data.question;
+  } catch (e) {
+    console.error('[daily-question] network error', e);
+    return fallbackTodaysQuestion(d);
+  }
 }
 
 /** Returns true if the user has already explicitly skipped today's question. */

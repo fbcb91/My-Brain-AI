@@ -8,10 +8,10 @@ import { useRecorder } from '../hooks/useRecorder';
 import { listCaptures, saveCapture } from '../lib/db';
 import { isWithinPreferredWindow } from '../lib/preferences';
 import {
+  fetchTodaysQuestion,
   hasAnsweredToday,
   isQuestionSkippedToday,
   markQuestionSkippedToday,
-  todaysQuestion,
 } from '../lib/questions';
 import { syncAll, pullFromServer } from '../lib/sync';
 import { transcribePending } from '../lib/transcribe';
@@ -218,7 +218,23 @@ export default function Today() {
   }, []);
 
   const recorder = useRecorder();
-  const question = useMemo(() => todaysQuestion(), []);
+  const [question, setQuestion] = useState<string | null>(null);
+
+  // Fetch today's question via the API (Claude Haiku) once the user is known.
+  // The API caches per-day so subsequent loads come back instantly.
+  useEffect(() => {
+    if (!user) {
+      setQuestion(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchTodaysQuestion(user.id).then((q) => {
+      if (!cancelled) setQuestion(q);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const loadAll = useCallback(async () => {
     const all = await listCaptures();
@@ -342,6 +358,7 @@ export default function Today() {
   }, [textValue, savingText, user, loadAll, sync]);
 
   const showDailyQuestion = useMemo(() => {
+    if (!question) return false;
     if (questionSkipped) return false;
     if (hasAnsweredToday(captures, question)) return false;
     if (!isWithinPreferredWindow()) return false;
@@ -507,7 +524,7 @@ export default function Today() {
           <p className="mt-3 text-center text-xs text-[#b94d2b]">{recorder.error}</p>
         )}
 
-        {showDailyQuestion && !textMode && !recorder.isRecording && (
+        {showDailyQuestion && question && !textMode && !recorder.isRecording && (
           <DailyQuestionCard
             question={question}
             onAnswer={() => setQuestionModalOpen(true)}
@@ -586,7 +603,7 @@ export default function Today() {
           ))}
       </div>
 
-      {questionModalOpen && (
+      {questionModalOpen && question && (
         <DailyAnswerModal
           question={question}
           userId={user?.id}
