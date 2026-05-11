@@ -5,6 +5,75 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface StoredChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  sources: string[];
+  createdAt: number;
+}
+
+function newMessageId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Loads the user's entire rolling chat thread from Supabase, oldest first.
+ * RLS scopes the result to the calling user automatically.
+ */
+export async function loadChatMessages(): Promise<StoredChatMessage[]> {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('id, role, content, sources, created_at')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    role: row.role as 'user' | 'assistant',
+    content: row.content as string,
+    sources: Array.isArray(row.sources) ? (row.sources as string[]) : [],
+    createdAt: new Date(row.created_at as string).getTime(),
+  }));
+}
+
+/** Persists a single chat message and returns its id. */
+export async function saveChatMessage(
+  role: 'user' | 'assistant',
+  content: string,
+  sources?: string[]
+): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not signed in.');
+  const id = newMessageId();
+  const { error } = await supabase.from('chat_messages').insert({
+    id,
+    user_id: user.id,
+    role,
+    content,
+    sources: sources && sources.length > 0 ? sources : null,
+  });
+  if (error) throw error;
+  return id;
+}
+
+/** Deletes every chat message for the current user. */
+export async function clearChatMessages(): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not signed in.');
+  const { error } = await supabase
+    .from('chat_messages')
+    .delete()
+    .eq('user_id', user.id);
+  if (error) throw error;
+}
+
 export interface ChatStreamHandlers {
   /** Called for each text chunk as it arrives from the model. */
   onText: (chunk: string) => void;
