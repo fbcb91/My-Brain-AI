@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import DailyAnswerModal from '../components/DailyAnswerModal';
 import DailyQuestionCard from '../components/DailyQuestionCard';
 import Waveform from '../components/Waveform';
+import WeeklyMirrorCard from '../components/WeeklyMirrorCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useRecorder } from '../hooks/useRecorder';
 import { listCaptures, saveCapture } from '../lib/db';
@@ -18,6 +19,12 @@ import { syncAll, pullFromServer } from '../lib/sync';
 import { transcribePending } from '../lib/transcribe';
 import { isLikelyHallucination } from '../lib/transcript-quality';
 import type { Capture } from '../lib/types';
+import {
+  dismissMirror,
+  fetchLatestWeeklyMirror,
+  isMirrorDismissed,
+  type WeeklyMirror,
+} from '../lib/weekly-mirror';
 
 const fmt = (s: number) => {
   const sec = Math.max(0, Math.floor(s));
@@ -220,6 +227,32 @@ export default function Today() {
 
   const recorder = useRecorder();
   const [question, setQuestion] = useState<string | null>(null);
+  const [weeklyMirror, setWeeklyMirror] = useState<WeeklyMirror | null>(null);
+  const [mirrorDismissed, setMirrorDismissed] = useState(false);
+
+  // Fetch latest weekly mirror in the background. Cheap when cached; ~5s
+  // first time it's generated for a given week.
+  useEffect(() => {
+    if (!user) {
+      setWeeklyMirror(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchLatestWeeklyMirror().then((m) => {
+      if (cancelled) return;
+      setWeeklyMirror(m);
+      if (m) setMirrorDismissed(isMirrorDismissed(m.weekStart));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const handleDismissMirror = useCallback(() => {
+    if (!weeklyMirror) return;
+    dismissMirror(weeklyMirror.weekStart);
+    setMirrorDismissed(true);
+  }, [weeklyMirror]);
 
   // Fetch today's question via the API (Claude Haiku) once the user is known.
   // The API caches per-day so subsequent loads come back instantly.
@@ -528,6 +561,13 @@ export default function Today() {
 
         {recorder.error && (
           <p className="mt-3 text-center text-xs text-[#b94d2b]">{recorder.error}</p>
+        )}
+
+        {weeklyMirror && !mirrorDismissed && !textMode && !recorder.isRecording && (
+          <WeeklyMirrorCard
+            mirror={weeklyMirror}
+            onDismiss={handleDismissMirror}
+          />
         )}
 
         {showDailyQuestion && question && !textMode && !recorder.isRecording && (
