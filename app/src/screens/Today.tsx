@@ -6,6 +6,7 @@ import Waveform from '../components/Waveform';
 import { useAuth } from '../contexts/AuthContext';
 import { useRecorder } from '../hooks/useRecorder';
 import { listCaptures, saveCapture } from '../lib/db';
+import { extractPendingEntities } from '../lib/entities';
 import { isWithinPreferredWindow } from '../lib/preferences';
 import {
   fetchTodaysQuestion,
@@ -252,6 +253,11 @@ export default function Today() {
       const tResult = await transcribePending();
       failures += tResult.failed;
       if (tResult.ok > 0) await loadAll();
+      // And once transcripts exist, extract entities so the People & Themes
+      // graph stays in sync. Cheap (~$0.001 / capture with Haiku) so we
+      // happily run it on every sync round.
+      const eResult = await extractPendingEntities();
+      if (eResult.ok > 0) await loadAll();
     } catch (e) {
       console.error('[sync] unexpected error', e);
       failures += 1;

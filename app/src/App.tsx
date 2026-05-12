@@ -5,6 +5,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { listCaptures } from './lib/db';
 import { isOnboarded, markOnboarded } from './lib/onboarding';
 import CaptureDetail from './screens/CaptureDetail';
+import Entities from './screens/Entities';
+import EntityDetail from './screens/EntityDetail';
 import Memory from './screens/Memory';
 import Onboarding from './screens/Onboarding';
 import SignIn from './screens/SignIn';
@@ -138,6 +140,22 @@ function AppRoutes() {
           element={
             <Protected>
               <CaptureDetail />
+            </Protected>
+          }
+        />
+        <Route
+          path="/entities"
+          element={
+            <Protected>
+              <Entities />
+            </Protected>
+          }
+        />
+        <Route
+          path="/entities/:id"
+          element={
+            <Protected>
+              <EntityDetail />
             </Protected>
           }
         />

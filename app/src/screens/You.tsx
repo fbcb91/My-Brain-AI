@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import {
   type DailyQuestionTime,
@@ -13,6 +14,7 @@ interface Section {
 
 export default function You() {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const [questionTime, setQuestionTimeState] = useState<DailyQuestionTime>(() =>
     getDailyQuestionTime()
   );
@@ -23,6 +25,16 @@ export default function You() {
   }
 
   const sections: Section[] = [
+    {
+      title: 'Your world',
+      rows: [
+        {
+          label: 'People & themes',
+          desc: 'Whoever and whatever keeps coming up',
+          onClick: () => navigate('/entities'),
+        },
+      ],
+    },
     {
       title: 'Heritage',
       rows: [

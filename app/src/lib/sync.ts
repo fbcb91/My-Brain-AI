@@ -96,6 +96,7 @@ interface ServerRow {
   transcript: string | null;
   question_text: string | null;
   is_private: boolean | null;
+  entities_extracted: boolean | null;
 }
 
 function rowToCapture(row: ServerRow): Capture {
@@ -111,6 +112,7 @@ function rowToCapture(row: ServerRow): Capture {
     transcript: row.transcript ?? undefined,
     questionText: row.question_text ?? undefined,
     isPrivate: row.is_private ?? false,
+    entitiesExtracted: row.entities_extracted ?? false,
     syncedAt: Date.now(),
     // audioBlob intentionally omitted — fetched lazily when the user opens
     // the capture detail view.

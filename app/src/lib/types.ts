@@ -22,6 +22,9 @@ export interface Capture {
   /** Marked private by the user. Excluded from chat memory context and
    * (in the future) from heir access. Defaults to false. */
   isPrivate?: boolean;
+  /** Server-side flag: has /api/extract-entities already processed this
+   * capture? Client treats as read-only — the server flips it to true. */
+  entitiesExtracted?: boolean;
   /** ms timestamp of last successful sync to Supabase. Null/undefined → pending. */
   syncedAt?: number;
 }
