@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import EntityChips from '../components/EntityChips';
 import { listCaptures, saveCapture } from '../lib/db';
+import { entitiesForCapture, type Entity } from '../lib/entities';
 import { deleteCaptureFully, getOrFetchAudioBlob } from '../lib/sync';
 import { isLikelyHallucination } from '../lib/transcript-quality';
 import type { Capture } from '../lib/types';
@@ -54,6 +56,9 @@ export default function CaptureDetail() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Linked entities (people / places / themes Niklaus extracted)
+  const [entities, setEntities] = useState<Entity[]>([]);
+
   const loadFromDb = useCallback(async () => {
     if (!id) return;
     const all = await listCaptures();
@@ -66,6 +71,20 @@ export default function CaptureDetail() {
   useEffect(() => {
     void loadFromDb();
   }, [loadFromDb]);
+
+  // Load linked entities — best-effort, separate from the capture row
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    entitiesForCapture(id)
+      .then((es) => {
+        if (!cancelled) setEntities(es);
+      })
+      .catch((e) => console.error('[capture-detail] entities load failed', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   // Lazy fetch audio if missing locally
   useEffect(() => {
@@ -335,6 +354,13 @@ export default function CaptureDetail() {
             </div>
           )}
         </section>
+
+        {entities.length > 0 && (
+          <section className="mt-7">
+            <p className="eyebrow mb-2">Niklaus recognised</p>
+            <EntityChips entities={entities} />
+          </section>
+        )}
 
         <section className="mt-7">
           <button

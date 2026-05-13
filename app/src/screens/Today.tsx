@@ -2,12 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import DailyAnswerModal from '../components/DailyAnswerModal';
 import DailyQuestionCard from '../components/DailyQuestionCard';
+import EntityChips from '../components/EntityChips';
 import Waveform from '../components/Waveform';
 import WeeklyMirrorCard from '../components/WeeklyMirrorCard';
 import { useAuth } from '../contexts/AuthContext';
 import { useRecorder } from '../hooks/useRecorder';
 import { listCaptures, saveCapture } from '../lib/db';
-import { extractPendingEntities } from '../lib/entities';
+import {
+  extractPendingEntities,
+  topRecentEntities,
+  type Entity,
+} from '../lib/entities';
 import { isWithinPreferredWindow } from '../lib/preferences';
 import {
   fetchTodaysQuestion,
@@ -229,6 +234,8 @@ export default function Today() {
   const [question, setQuestion] = useState<string | null>(null);
   const [weeklyMirror, setWeeklyMirror] = useState<WeeklyMirror | null>(null);
   const [mirrorDismissed, setMirrorDismissed] = useState(false);
+  const [worldEntities, setWorldEntities] = useState<Entity[]>([]);
+  const [worldLoaded, setWorldLoaded] = useState(false);
 
   // Fetch latest weekly mirror in the background. Cheap when cached; ~5s
   // first time it's generated for a given week.
@@ -253,6 +260,29 @@ export default function Today() {
     dismissMirror(weeklyMirror.weekStart);
     setMirrorDismissed(true);
   }, [weeklyMirror]);
+
+  // Top recent entities for the "Your world" preview. Refetched whenever the
+  // local captures change so a freshly extracted entity shows up without a
+  // full reload.
+  useEffect(() => {
+    if (!user) {
+      setWorldEntities([]);
+      setWorldLoaded(false);
+      return;
+    }
+    let cancelled = false;
+    void topRecentEntities(6)
+      .then((es) => {
+        if (!cancelled) {
+          setWorldEntities(es);
+          setWorldLoaded(true);
+        }
+      })
+      .catch((e) => console.error('[today] world entities load failed', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [user, captures]);
 
   // Fetch today's question via the API (Claude Haiku) once the user is known.
   // The API caches per-day so subsequent loads come back instantly.
@@ -570,12 +600,27 @@ export default function Today() {
           />
         )}
 
+        {!weeklyMirror && captures.length > 0 && !textMode && !recorder.isRecording && (
+          <div className="mt-6 rounded-3xl border border-dashed border-line p-4 text-center">
+            <p className="text-[13px] text-ink-3">
+              Niklaus writes you a reflection of last week here, every Monday.
+            </p>
+          </div>
+        )}
+
         {showDailyQuestion && question && !textMode && !recorder.isRecording && (
           <DailyQuestionCard
             question={question}
             onAnswer={() => setQuestionModalOpen(true)}
             onSkip={handleSkipQuestion}
           />
+        )}
+
+        {worldLoaded && worldEntities.length > 0 && !textMode && !recorder.isRecording && (
+          <section className="mt-7">
+            <p className="eyebrow mb-2">Your world</p>
+            <EntityChips entities={worldEntities} showSeeAll />
+          </section>
         )}
 
         {!loaded && (

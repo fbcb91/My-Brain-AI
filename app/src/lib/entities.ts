@@ -115,6 +115,52 @@ export async function capturesForEntity(entityId: string): Promise<Capture[]> {
 }
 
 /**
+ * Returns the entities linked to a single capture, ordered by kind so the
+ * chips in the UI come out grouped (people first, then places, then themes).
+ */
+export async function entitiesForCapture(captureId: string): Promise<Entity[]> {
+  const { data, error } = await supabase
+    .from('capture_entities')
+    .select(
+      `entity:entities (
+        id, name, kind, mentions_count, first_mention_at, last_mention_at, summary
+      )`
+    )
+    .eq('capture_id', captureId);
+  if (error) throw error;
+  const rows = (data ?? []) as {
+    entity: EntityRow | EntityRow[] | null;
+  }[];
+  const KIND_ORDER: Record<EntityKind, number> = { person: 0, place: 1, theme: 2 };
+  return rows
+    .map((r) => (Array.isArray(r.entity) ? r.entity[0] ?? null : r.entity))
+    .filter((e): e is EntityRow => e !== null)
+    .map(rowToEntity)
+    .sort((a, b) => {
+      const k = KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
+      if (k !== 0) return k;
+      return b.mentionsCount - a.mentionsCount;
+    });
+}
+
+/**
+ * Returns the user's top N entities by recency. Used by Today's "Your
+ * world" preview, where we surface the names that are alive in the user's
+ * memory right now.
+ */
+export async function topRecentEntities(limit = 8): Promise<Entity[]> {
+  const { data, error } = await supabase
+    .from('entities')
+    .select(
+      'id, name, kind, mentions_count, first_mention_at, last_mention_at, summary'
+    )
+    .order('last_mention_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) throw error;
+  return ((data ?? []) as EntityRow[]).map(rowToEntity);
+}
+
+/**
  * Asks the server to run entity extraction on a single capture. Idempotent —
  * the server short-circuits if `entities_extracted` is already true.
  */
