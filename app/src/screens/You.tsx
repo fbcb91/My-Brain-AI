@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
+import { countHeirs } from '../lib/heirs';
 import {
   type DailyQuestionTime,
   getDailyQuestionTime,
@@ -18,11 +19,33 @@ export default function You() {
   const [questionTime, setQuestionTimeState] = useState<DailyQuestionTime>(() =>
     getDailyQuestionTime()
   );
+  const [heirsCount, setHeirsCount] = useState<number | null>(null);
 
   function setQuestionTime(value: DailyQuestionTime) {
     setDailyQuestionTime(value);
     setQuestionTimeState(value);
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    countHeirs()
+      .then((n) => {
+        if (!cancelled) setHeirsCount(n);
+      })
+      .catch(() => {
+        if (!cancelled) setHeirsCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const heirsDesc =
+    heirsCount === null
+      ? 'No one designated yet'
+      : heirsCount === 0
+        ? 'No one designated yet'
+        : `${heirsCount} ${heirsCount === 1 ? 'person' : 'people'} designated`;
 
   const sections: Section[] = [
     {
@@ -38,7 +61,11 @@ export default function You() {
     {
       title: 'Heritage',
       rows: [
-        { label: 'Designate heirs', desc: 'No one designated yet' },
+        {
+          label: 'Designate heirs',
+          desc: heirsDesc,
+          onClick: () => navigate('/heritage/heirs'),
+        },
         { label: 'Heritage preferences', desc: 'Defaults applied' },
         { label: 'Time-locked messages', desc: 'None yet' },
       ],

@@ -7,6 +7,7 @@ import { isOnboarded, markOnboarded } from './lib/onboarding';
 import CaptureDetail from './screens/CaptureDetail';
 import Entities from './screens/Entities';
 import EntityDetail from './screens/EntityDetail';
+import Heirs from './screens/Heirs';
 import Memory from './screens/Memory';
 import Onboarding from './screens/Onboarding';
 import SignIn from './screens/SignIn';
@@ -156,6 +157,14 @@ function AppRoutes() {
           element={
             <Protected>
               <EntityDetail />
+            </Protected>
+          }
+        />
+        <Route
+          path="/heritage/heirs"
+          element={
+            <Protected>
+              <Heirs />
             </Protected>
           }
         />
