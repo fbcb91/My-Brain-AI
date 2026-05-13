@@ -7,6 +7,7 @@ import {
   getDailyQuestionTime,
   setDailyQuestionTime,
 } from '../lib/preferences';
+import { countTimeLockedMessages } from '../lib/timeLockedMessages';
 
 interface Section {
   title: string;
@@ -20,6 +21,7 @@ export default function You() {
     getDailyQuestionTime()
   );
   const [heirsCount, setHeirsCount] = useState<number | null>(null);
+  const [messagesCount, setMessagesCount] = useState<number | null>(null);
 
   function setQuestionTime(value: DailyQuestionTime) {
     setDailyQuestionTime(value);
@@ -35,6 +37,13 @@ export default function You() {
       .catch(() => {
         if (!cancelled) setHeirsCount(null);
       });
+    countTimeLockedMessages()
+      .then((n) => {
+        if (!cancelled) setMessagesCount(n);
+      })
+      .catch(() => {
+        if (!cancelled) setMessagesCount(null);
+      });
     return () => {
       cancelled = true;
     };
@@ -46,6 +55,13 @@ export default function You() {
       : heirsCount === 0
         ? 'No one designated yet'
         : `${heirsCount} ${heirsCount === 1 ? 'person' : 'people'} designated`;
+
+  const messagesDesc =
+    messagesCount === null
+      ? 'None yet'
+      : messagesCount === 0
+        ? 'None yet'
+        : `${messagesCount} ${messagesCount === 1 ? 'message' : 'messages'} locked`;
 
   const sections: Section[] = [
     {
@@ -66,8 +82,12 @@ export default function You() {
           desc: heirsDesc,
           onClick: () => navigate('/heritage/heirs'),
         },
+        {
+          label: 'Time-locked messages',
+          desc: messagesDesc,
+          onClick: () => navigate('/heritage/messages'),
+        },
         { label: 'Heritage preferences', desc: 'Defaults applied' },
-        { label: 'Time-locked messages', desc: 'None yet' },
       ],
     },
     {

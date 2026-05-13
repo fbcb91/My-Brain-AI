@@ -11,6 +11,8 @@ import Heirs from './screens/Heirs';
 import Memory from './screens/Memory';
 import Onboarding from './screens/Onboarding';
 import SignIn from './screens/SignIn';
+import TimeLockedMessageForm from './screens/TimeLockedMessageForm';
+import TimeLockedMessages from './screens/TimeLockedMessages';
 import Today from './screens/Today';
 import You from './screens/You';
 
@@ -165,6 +167,22 @@ function AppRoutes() {
           element={
             <Protected>
               <Heirs />
+            </Protected>
+          }
+        />
+        <Route
+          path="/heritage/messages"
+          element={
+            <Protected>
+              <TimeLockedMessages />
+            </Protected>
+          }
+        />
+        <Route
+          path="/heritage/messages/:id"
+          element={
+            <Protected>
+              <TimeLockedMessageForm />
             </Protected>
           }
         />
